@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>탁구 점수판</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#141416">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="탁구 점수판">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface2: #f4f4f6;
+    --border: #e4e4e9;
+    --text: #141416;
+    --muted: #6d6d78;
+    --primary: #141416;
+    --on-primary: #ffffff;
+    --red: #e53935;
+    --blue: #1e6fe8;
+    --win: #16924a;
+    --lose: #d23a2f;
+    --win-bg: #e7f6ed;
+    --lose-bg: #fdecea;
+    --gold: #c99a06;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111214;
+    --surface: #1a1b1e;
+    --surface2: #24262a;
+    --border: #34363c;
+    --text: #f1f1f4;
+    --muted: #9a9ca5;
+    --primary: #f1f1f4;
+    --on-primary: #111214;
+    --win: #4cd27f;
+    --lose: #ff6b60;
+    --win-bg: #173323;
+    --lose-bg: #3a1c1a;
+    --gold: #f2c230;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111214; --surface: #1a1b1e; --surface2: #24262a; --border: #34363c;
+      --text: #f1f1f4; --muted: #9a9ca5; --primary: #f1f1f4; --on-primary: #111214;
+      --win: #4cd27f; --lose: #ff6b60; --win-bg: #173323; --lose-bg: #3a1c1a; --gold: #f2c230;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+
+  /* ---------- 머리글 ---------- */
+  header {
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg);
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
+  .head-row { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; }
+  .logo-mark {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: var(--primary); color: var(--on-primary);
+    display: grid; place-items: center; font-size: 18px;
+  }
+  .theme { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  .switch { position: relative; width: 38px; height: 22px; }
+  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; }
+  .switch span {
+    position: absolute; inset: 0; border-radius: 11px; background: var(--border); pointer-events: none;
+    transition: background .2s;
+  }
+  .switch span::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+  .switch input:checked + span { background: var(--primary); }
+  .switch input:checked + span::after { transform: translateX(16px); background: var(--on-primary); }
+  nav.tabs { display: flex; gap: 4px; }
+  nav.tabs button {
+    background: none; border: 0; padding: 10px 12px; color: var(--muted);
+    border-bottom: 2px solid transparent; font-weight: 600;
+  }
+  nav.tabs button.active { color: var(--text); border-bottom-color: var(--text); }
+
+  main { padding: 28px 0 60px; }
+  .page-title { font-size: 26px; font-weight: 800; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* ---------- 공통 ---------- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .narrow { max-width: 448px; margin: 0 auto; }
+  .label { font-weight: 700; font-size: 14px; margin: 22px 0 8px; }
+  .label:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+  .center { text-align: center; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+  .dot.red { background: var(--red); }
+  .dot.blue { background: var(--blue); }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; background: var(--surface); outline: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--text); }
+  .btn {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 9px;
+    padding: 9px 14px; font-weight: 600; white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+  .btn.primary:hover { opacity: .9; }
+  .btn.danger { color: var(--lose); }
+  .btn.big { width: 100%; padding: 15px; font-size: 16px; margin-top: 26px; border-radius: 10px; }
+  .btn.small { padding: 6px 10px; font-size: 13px; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+  .seg button {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+    padding: 9px 6px; color: var(--muted); font-size: 14px;
+  }
+  .seg button.on { border: 2px solid var(--text); color: var(--text); font-weight: 700; padding: 8px 5px; }
+
+  /* ---------- 점수판 설정 ---------- */
+  .players { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pbox { border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .plabel { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .pbox input { font-weight: 700; font-size: 16px; }
+  .hcbox {
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+  }
+  .hcbox .arrow {
+    width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); font-size: 13px;
+  }
+  .hcbox .val { font-size: 20px; font-weight: 800; min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+  .resume {
+    border: 1px solid var(--border); background: var(--surface2); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .resume .txt { flex: 1; min-width: 160px; font-size: 14px; }
+  .howto { margin-top: 40px; border-top: 1px solid var(--border); padding-top: 24px; }
+  .howto h2 { font-size: 19px; margin: 0 0 8px; }
+  .howto p, .howto li { color: var(--muted); }
+  .howto li b { color: var(--text); }
+
+  /* ---------- 라이브 점수판 ---------- */
+  #live {
+    position: fixed; inset: 0; z-index: 50;
+    display: none; flex-direction: column;
+    background: #0c0c0e; color: #fff;
+    user-select: none; -webkit-user-select: none;
+    touch-action: manipulation;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  #live.show { display: flex; }
+  .live-top, .live-bottom {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: #0c0c0e; font-size: 14px;
+  }
+  .live-top { justify-content: space-between; }
+  .live-top .title { font-weight: 800; font-size: 16px; }
+  .live-top .prev { color: #b7b7c2; font-variant-numeric: tabular-nums; }
+  .live-top .deuce {
+    background: #ffd400; color: #000; font-weight: 900; border-radius: 6px; padding: 2px 10px; visibility: hidden;
+  }
+  .live-top .deuce.show { visibility: visible; }
+  .live-main { flex: 1; display: flex; min-height: 0; position: relative; }
+  .side {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; cursor: pointer; padding: 10px; overflow: hidden;
+  }
+  .side.red { background: linear-gradient(160deg, #d63431, #861a18); }
+  .side.blue { background: linear-gradient(160deg, #2876ea, #0d3d8c); }
+  .side:active { filter: brightness(1.15); }
+  .side .pname { font-size: clamp(18px, 5vmin, 44px); font-weight: 800; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side .pscore { font-size: clamp(90px, 44vmin, 380px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+  .side .setdots { display: flex; gap: 8px; margin: 8px 0 4px; }
+  .side .setdots i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.75); }
+  .side .setdots i.on { background: #fff; }
+  .side .serve {
+    position: absolute; top: 14px;
+    background: #fff; color: #111; border-radius: 999px; padding: 4px 12px; font-weight: 800; font-size: clamp(12px, 2.6vmin, 18px);
+    display: none;
+  }
+  .side.left .serve { left: 14px; }
+  .side.right .serve { right: 14px; }
+  .side .serve.show { display: block; }
+  .side .status {
+    position: absolute; bottom: 16px;
+    background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.5);
+    border-radius: 999px; padding: 4px 14px; font-weight: 800; font-size: clamp(12px, 2.8vmin, 20px);
+    display: none;
+  }
+  .side .status.show { display: block; }
+  .live-bottom { justify-content: center; }
+  .live-bottom button {
+    background: #26262c; color: #fff; border: 1px solid #3a3a42; border-radius: 9px; padding: 9px 16px; font-weight: 700;
+  }
+  .live-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,.6);
+    display: none; align-items: center; justify-content: center; padding: 16px;
+  }
+  .live-overlay.show { display: flex; }
+  .live-card {
+    background: #fff; color: #111; border-radius: 16px; padding: 22px 26px; text-align: center;
+    max-width: 440px; width: 100%; max-height: 100%; overflow: auto;
+  }
+  .live-card h3 { margin: 0 0 4px; font-size: 22px; }
+  .live-card .big { font-size: 34px; font-weight: 900; margin: 8px 0; font-variant-numeric: tabular-nums; }
+  .live-card .sets { color: #666; font-size: 14px; margin-bottom: 14px; }
+  .live-card .btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .live-card .btn { background: #f2f2f4; color: #111; border-color: #ddd; }
+  .live-card .btn.primary { background: #111; color: #fff; border-color: #111; }
+
+  /* ---------- 대회 관리 ---------- */
+  .comp-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .comp-head h1 { margin: 0; font-size: 24px; }
+  .comp-head .meta { color: var(--muted); font-size: 14px; }
+  .comp-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .progress { height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; margin-top: 8px; max-width: 320px; }
+  .progress i { display: block; height: 100%; background: var(--win); }
+  .subtabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .subtabs button {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 7px 16px; font-weight: 600; color: var(--muted);
+  }
+  .subtabs button.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+  .scroll-x { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+  table.std { border-collapse: collapse; width: 100%; font-size: 14px; white-space: nowrap; }
+  table.std th, table.std td { padding: 10px 10px; text-align: center; border-bottom: 1px solid var(--border); }
+  table.std th { background: var(--surface2); font-size: 12.5px; color: var(--muted); font-weight: 700; }
+  table.std tr:last-child td { border-bottom: 0; }
+  table.std td.name { text-align: left; font-weight: 700; }
+  table.std td.name button { background: none; border: 0; padding: 0; font-weight: 700; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  .rank { font-weight: 800; }
+  .rank.r1 { color: var(--gold); }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface2); color: var(--muted); margin-left: 6px; font-weight: 600; }
+  .w { color: var(--win); font-weight: 700; }
+  .l { color: var(--lose); font-weight: 700; }
+  .rules { color: var(--muted); font-size: 13px; margin-top: 10px; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .filters select { width: auto; min-width: 140px; padding: 8px 10px; }
+  .round-title { font-weight: 800; margin: 18px 0 8px; font-size: 14px; color: var(--muted); }
+  .mrow {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+    width: 100%; text-align: left;
+    border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 10px 14px; margin-bottom: 6px;
+  }
+  .mrow:hover { background: var(--surface2); }
+  .mrow:disabled { cursor: default; opacity: .6; }
+  .mrow:disabled:hover { background: var(--surface); }
+  .mrow .n1 { text-align: right; }
+  .mrow .sc { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
+  .mrow .sc.todo { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .mrow .det { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 12.5px; margin-top: -4px; }
+  .mrow .winner { font-weight: 800; }
+
+  table.cross { border-collapse: collapse; font-size: 13px; }
+  table.cross th, table.cross td { border: 1px solid var(--border); padding: 0; text-align: center; }
+  table.cross th { background: var(--surface2); padding: 6px 8px; font-weight: 700; white-space: nowrap; }
+  table.cross th.top { writing-mode: vertical-rl; padding: 8px 4px; max-height: 120px; }
+  table.cross td button { width: 48px; height: 36px; border: 0; background: none; font-weight: 700; }
+  table.cross td.self { background: var(--surface2); }
+  table.cross td.won { background: var(--win-bg); color: var(--win); }
+  table.cross td.lost { background: var(--lose-bg); color: var(--lose); }
+  table.cross td button { color: inherit; }
+
+  .bracket { display: flex; gap: 22px; overflow-x: auto; padding: 4px 2px 12px; }
+  .bcol { display: flex; flex-direction: column; min-width: 180px; }
+  .bcol h4 { margin: 0 0 8px; text-align: center; font-size: 14px; color: var(--muted); }
+  .bcol .slots { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 8px; }
+  .bm {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; text-align: left; padding: 0; width: 100%;
+  }
+  .bm:not(:disabled):hover { border-color: var(--text); }
+  .bm:disabled { cursor: default; }
+  .bm .line { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; font-size: 14px; }
+  .bm .line + .line { border-top: 1px solid var(--border); }
+  .bm .line.win { font-weight: 800; }
+  .bm .line.lose { color: var(--muted); }
+  .bm .line .s { font-variant-numeric: tabular-nums; }
+  .bm .tbd { color: var(--muted); font-style: italic; }
+  .champ { text-align: center; margin-top: 14px; font-size: 18px; font-weight: 800; color: var(--gold); }
+
+  .form-row { margin-top: 18px; }
+  .count { font-size: 13px; color: var(--muted); margin-top: 6px; display: flex; justify-content: space-between; }
+  .count.bad { color: var(--lose); }
+
+  /* ---------- 대화 상자 ---------- */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60;
+    display: none; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow: auto;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 16px; width: 100%; max-width: 460px; padding: 22px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.3);
+  }
+  .modal h3 { margin: 0 0 14px; font-size: 19px; }
+  .modal .btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+  .vs { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 800; }
+  .vs .a { text-align: right; }
+  .setrow { display: grid; grid-template-columns: 52px 1fr auto 1fr; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .setrow .no { color: var(--muted); font-size: 13px; }
+  .setrow input { text-align: center; font-weight: 700; font-size: 17px; padding: 8px; }
+  .summary { text-align: center; font-weight: 700; margin-top: 10px; min-height: 24px; }
+  .error { color: var(--lose); font-size: 13.5px; text-align: center; min-height: 20px; margin-top: 6px; }
+  .plist { margin-top: 14px; max-height: 50vh; overflow: auto; }
+  .plist .it { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .plist .it .d { color: var(--muted); font-size: 12.5px; }
+
+  .ask-bg { z-index: 90; align-items: center; padding-top: 16px; }
+  .modal.ask { max-width: 360px; }
+  .modal.ask p { margin: 0; font-size: 16px; line-height: 1.6; }
+  .btn.danger-fill { background: var(--lose); border-color: var(--lose); color: #fff; }
+  .toast {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
+    background: #111; color: #fff; padding: 10px 18px; border-radius: 999px; font-weight: 700;
+    z-index: 80; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 560px) {
+    .card { padding: 18px; }
+    .page-title { font-size: 22px; }
+    .seg { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="head-row">
+      <div class="logo"><div class="logo-mark">🏓</div>탁구 점수판</div>
+      <label class="theme">다크
+        <span class="switch"><input type="checkbox" id="themeToggle" aria-label="다크 모드"><span></span></span>
+      </label>
+    </div>
+    <nav class="tabs">
+      <button data-tab="score">점수판</button>
+      <button data-tab="comp">대회 관리</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ================= 점수판 ================= -->
+  <section class="tab" id="tab-score">
+    <h1 class="page-title">탁구 점수판</h1>
+    <p class="lead">심판 볼 때 바로 쓰는 터치 점수판입니다. 탭으로 점수를 올리고, 서브권과 듀스를 자동으로 표시합니다.</p>
+
+    <div class="card narrow">
+      <div id="resumeBox"></div>
+      <div class="label">선수</div>
+      <div class="players">
+        <div class="pbox">
+          <div class="plabel"><span class="dot red"></span>선수A</div>
+          <input type="text" id="nameA" placeholder="A" maxlength="20">
+        </div>
+        <div class="pbox">
+          <div class="plabel"><span class="dot blue"></span>선수B</div>
+          <input type="text" id="nameB" placeholder="B" maxlength="20">
+        </div>
+      </div>
+
+      <div class="label">핸디캡</div>
+      <div class="hcbox">
+        <span class="dot red"></span>
+        <button class="arrow" id="hcLeft" aria-label="선수A 핸디캡 올리기">◀</button>
+        <span class="val" id="hcVal">0 : 0</span>
+        <button class="arrow" id="hcRight" aria-label="선수B 핸디캡 올리기">▶</button>
+        <span class="dot blue"></span>
+      </div>
+      <p class="hint">한쪽 선수에게만 핸디캡을 줍니다. 그 선수는 핸디캡 점수에서 시작하고, 세트마다 같은 값이 다시 적용됩니다.</p>
+
+      <div class="label">첫 서브</div>
+      <div class="seg" id="firstSeg">
+        <button data-v="0">선수A</button>
+        <button data-v="1">선수B</button>
+      </div>
+
+      <div class="label">경기 방식 (11점, 선취 세트 수)</div>
+      <div class="seg" id="boSeg">
+        <button data-v="1">1전1선승</button>
+        <button data-v="3">3전2선승</button>
+        <button data-v="5">5전3선승</button>
+        <button data-v="7">7전4선승</button>
+      </div>
+
+      <button class="btn primary big" id="startBtn">점수판 시작</button>
+      <p class="hint center">시작하면 화면이 가로로 고정됩니다. 지원하지 않는 기기에서는 기기를 직접 가로로 돌려주세요.</p>
+    </div>
+
+    <div class="howto">
+      <h2>탁구 점수판 사용 방법</h2>
+      <ol>
+        <li><b>선수·핸디캡 설정</b> — 선수 이름을 입력하고, 필요하면 한쪽 선수에게 핸디캡 점수를 줍니다.</li>
+        <li><b>경기 방식 선택</b> — 1·3·5·7전 중 선취 세트 수를 고른 뒤 '점수판 시작'을 누릅니다.</li>
+        <li><b>점수 올리기</b> — 점수를 딴 선수 쪽 화면을 누릅니다. 실수했으면 '되돌리기'를 누르세요.</li>
+        <li><b>자동 표시</b> — 2점마다 서브가 바뀌고, 10:10부터는 듀스로 1점마다 바뀝니다. 세트가 끝나면 코트를 바꾸고, 마지막 세트는 한 선수가 5점을 따면 코트를 바꿉니다.</li>
+        <li><b>대회 연동</b> — '대회 관리'에서 경기를 골라 점수판으로 진행하면 결과가 대회 기록에 저장됩니다.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ================= 대회 관리 ================= -->
+  <section class="tab" id="tab-comp">
+    <div id="compRoot"></div>
+  </section>
+</main>
+
+<!-- 라이브 점수판 -->
+<div id="live">
+  <div class="live-top">
+    <span class="title" id="liveTitle"></span>
+    <span class="deuce" id="liveDeuce">듀스</span>
+    <span class="prev" id="livePrev"></span>
+  </div>
+  <div class="live-main">
+    <div class="side left" id="sideL">
+      <span class="serve">🏓 서브</span>
+      <div class="pname"></div>
+      <div class="setdots"></div>
+      <div class="pscore">0</div>
+      <span class="status"></span>
+    </div>
+    <div class="side right" id="sideR">
+      <span class="serve">🏓 서브</span>
+      <div class="pname"></div>
+      <div class="setdots"></div>
+      <div class="pscore">0</div>
+      <span class="status"></span>
+    </div>
+    <div class="live-overlay" id="liveOverlay"><div class="live-card" id="liveCard"></div></div>
+  </div>
+  <div class="live-bottom">
+    <button id="liveUndo">↶ 되돌리기</button>
+    <button id="liveSwap">⇄ 코트 교대</button>
+    <button id="liveExit">✕ 나가기</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div class="modal-bg ask-bg" id="askBg"><div class="modal ask">
+  <p id="askMsg"></p>
+  <div class="btns"><button class="btn" id="askCancel">취소</button><button class="btn primary" id="askOk">확인</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script>
+(() => {
+  // =========================================================
+  // 공통 도구
+  // =========================================================
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("tt." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("tt." + k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem("tt." + k); } catch {} },
+  };
+  const BO_NAME = { 1: "1전1선승", 3: "3전2선승", 5: "5전3선승", 7: "7전4선승" };
+  const need = bo => Math.ceil(bo / 2);
+  const MIN_PLAYERS = 2, MAX_PLAYERS = 36;
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  function makeSeg(el, value, onChange) {
+    const btns = [...el.querySelectorAll("button")];
+    const paint = v => btns.forEach(b => b.classList.toggle("on", b.dataset.v === String(v)));
+    btns.forEach(b => b.addEventListener("click", () => { paint(b.dataset.v); onChange(b.dataset.v); }));
+    paint(value);
+  }
+
+  // 세트 점수가 규칙에 맞는지 (11점, 10:10 이후 2점 차)
+  function validSet(x, y) {
+    const w = Math.max(x, y), l = Math.min(x, y);
+    if (w < 11) return false;
+    if (w === 11) return l <= 9;
+    return w - l === 2;
+  }
+
+  // ---------- 테마 ----------
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    $("#themeToggle").checked = t === "dark";
+  }
+  applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  $("#themeToggle").addEventListener("change", e => {
+    const t = e.target.checked ? "dark" : "light";
+    applyTheme(t); store.set("theme", t);
+  });
+
+  // ---------- 탭 ----------
+  function showTab(name) {
+    document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+    document.querySelectorAll(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
+    store.set("tab", name);
+    if (name === "comp") renderComp();
+    if (name === "score") renderResume();
+  }
+  document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+  // ---------- 대화 상자 ----------
+  function openModal(html) {
+    $("#modal").innerHTML = html;
+    $("#modalBg").classList.add("show");
+  }
+  function closeModal() { $("#modalBg").classList.remove("show"); }
+  $("#modalBg").addEventListener("mousedown", e => { if (e.target.id === "modalBg") closeModal(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+  // 앱 안에서는 브라우저 기본 확인창이 막혀 있어서 직접 만든 확인창을 씁니다
+  function ask(msg, { ok = "확인", cancel = "취소", danger = false } = {}) {
+    return new Promise(resolve => {
+      const bg = $("#askBg");
+      $("#askMsg").textContent = msg;
+      const okBtn = $("#askOk"), cancelBtn = $("#askCancel");
+      okBtn.textContent = ok;
+      okBtn.classList.toggle("danger-fill", danger);
+      cancelBtn.textContent = cancel;
+      cancelBtn.hidden = cancel === null;
+      const done = v => { bg.classList.remove("show"); okBtn.onclick = cancelBtn.onclick = null; resolve(v); };
+      okBtn.onclick = () => done(true);
+      cancelBtn.onclick = () => done(false);
+      bg.classList.add("show");
+      okBtn.focus();
+    });
+  }
+  const notify = msg => ask(msg, { cancel: null });
+
+  // =========================================================
+  // 점수판 설정
+  // =========================================================
+  const setup = store.get("setup", { hc: 0, bestOf: 3, first: 0 });
+  function paintHc() {
+    $("#hcVal").textContent = `${Math.max(0, -setup.hc)} : ${Math.max(0, setup.hc)}`;
+  }
+  $("#hcLeft").addEventListener("click", () => { setup.hc = Math.max(-10, setup.hc - 1); paintHc(); store.set("setup", setup); });
+  $("#hcRight").addEventListener("click", () => { setup.hc = Math.min(10, setup.hc + 1); paintHc(); store.set("setup", setup); });
+  makeSeg($("#firstSeg"), setup.first, v => { setup.first = Number(v); store.set("setup", setup); });
+  makeSeg($("#boSeg"), setup.bestOf, v => { setup.bestOf = Number(v); store.set("setup", setup); });
+  paintHc();
+
+  $("#startBtn").addEventListener("click", async () => {
+    if (sb && !sb.done && !(await ask("진행 중인 경기가 있습니다. 새 경기를 시작할까요?", { ok: "새 경기 시작" }))) return;
+    startScoreboard({
+      names: [$("#nameA").value.trim() || "A", $("#nameB").value.trim() || "B"],
+      hc: setup.hc, bestOf: setup.bestOf, first: setup.first, link: null,
+    });
+  });
+
+  function renderResume() {
+    const box = $("#resumeBox");
+    if (!sb) { box.innerHTML = ""; return; }
+    const d = derive(sb);
+    box.innerHTML = `<div class="resume">
+      <div class="txt"><b>${sb.done ? "끝난 경기" : "진행 중인 경기"}</b><br>
+        ${esc(sb.names[0])} <b>${d.won[0]} : ${d.won[1]}</b> ${esc(sb.names[1])}</div>
+      <button class="btn small primary" id="resumeGo">${sb.done ? "결과 보기" : "이어하기"}</button>
+      <button class="btn small" id="resumeDel">지우기</button></div>`;
+    $("#resumeGo").onclick = () => openLive();
+    $("#resumeDel").onclick = () => { sb = null; store.del("sb"); renderResume(); };
+  }
+
+  // =========================================================
+  // 라이브 점수판
+  // =========================================================
+  let sb = store.get("sb", null);
+  let wakeLock = null;
+
+  function startScoreboard(opts) {
+    sb = { ...opts, sets: [], log: [], manualSwap: false, done: false, pause: false };
+    store.set("sb", sb);
+    openLive();
+  }
+
+  async function openLive() {
+    $("#live").classList.add("show");
+    renderLive();
+    try { await document.documentElement.requestFullscreen?.(); } catch {}
+    try { await screen.orientation?.lock?.("landscape"); } catch {}
+    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  }
+
+  function closeLive() {
+    $("#live").classList.remove("show");
+    try { if (document.fullscreenElement) document.exitFullscreen(); } catch {}
+    try { wakeLock?.release(); } catch {}
+    wakeLock = null;
+    renderResume();
+  }
+
+  // 기록(log)으로부터 현재 점수, 서브, 코트 위치를 계산합니다
+  function derive(s) {
+    const n = need(s.bestOf);
+    const setIdx = s.sets.length;
+    const won = [0, 0];
+    s.sets.forEach(x => won[x.a > x.b ? 0 : 1]++);
+    const hc = [Math.max(0, -s.hc), Math.max(0, s.hc)];
+    let a = hc[0], b = hc[1];
+    let srv = s.first ^ (setIdx % 2), cnt = 0;
+    for (const p of s.log) {
+      if (p === 0) a++; else b++;
+      cnt++;
+      if (a >= 10 && b >= 10) { srv ^= 1; cnt = 0; }
+      else if (cnt === 2) { srv ^= 1; cnt = 0; }
+    }
+    const deciding = won[0] === n - 1 && won[1] === n - 1;
+    const midSwap = deciding && !s.done && Math.max(a, b) >= 5;
+    const swapped = Boolean((setIdx % 2) ^ (s.manualSwap ? 1 : 0) ^ (midSwap ? 1 : 0));
+    return { n, setIdx, won, a, b, srv, swapped, deciding };
+  }
+
+  function addPoint(p) {
+    if (!sb || sb.done || sb.pause) return;
+    const before = derive(sb).swapped;
+    sb.log.push(p);
+    let d = derive(sb);
+    if ((d.a >= 11 || d.b >= 11) && Math.abs(d.a - d.b) >= 2) {
+      sb.sets.push({ a: d.a, b: d.b, log: sb.log });
+      sb.log = [];
+      d = derive(sb);
+      if (d.won[0] >= d.n || d.won[1] >= d.n) sb.done = true;
+      else sb.pause = true;
+    } else if (d.swapped !== before) {
+      toast("마지막 세트 5점 — 코트를 바꿉니다");
+    }
+    try { navigator.vibrate?.(25); } catch {}
+    store.set("sb", sb);
+    renderLive();
+  }
+
+  function undo() {
+    if (!sb) return;
+    if (!sb.log.length) {
+      if (!sb.sets.length) return;
+      sb.log = sb.sets.pop().log;
+    }
+    sb.log.pop();
+    sb.done = false;
+    sb.pause = false;
+    store.set("sb", sb);
+    renderLive();
+  }
+
+  function renderLive() {
+    if (!sb) return;
+    const d = derive(sb);
+    const scores = [d.a, d.b];
+    const order = d.swapped ? [1, 0] : [0, 1];
+    [["#sideL", order[0]], ["#sideR", order[1]]].forEach(([sel, p]) => {
+      const el = $(sel);
+      el.dataset.p = p;
+      el.classList.toggle("red", p === 0);
+      el.classList.toggle("blue", p === 1);
+      el.querySelector(".pname").textContent = sb.names[p];
+      el.querySelector(".pscore").textContent = scores[p];
+      el.querySelector(".setdots").innerHTML = Array.from({ length: d.n }, (_, i) => `<i class="${i < d.won[p] ? "on" : ""}"></i>`).join("");
+      el.querySelector(".serve").classList.toggle("show", d.srv === p && !sb.done && !sb.pause);
+      const me = scores[p], op = scores[1 - p];
+      const st = el.querySelector(".status");
+      const isPoint = !sb.done && !sb.pause && me >= 10 && me - op >= 1;
+      st.textContent = d.won[p] === d.n - 1 ? "매치 포인트" : "세트 포인트";
+      st.classList.toggle("show", isPoint);
+    });
+    const shownSet = sb.done || sb.pause ? d.setIdx : d.setIdx + 1;
+    $("#liveTitle").textContent = `${shownSet}세트 · ${BO_NAME[sb.bestOf]}`;
+    $("#liveDeuce").classList.toggle("show", !sb.done && !sb.pause && d.a === d.b && d.a >= 10);
+    $("#livePrev").textContent = sb.sets.map(s => `${s.a}-${s.b}`).join("  ");
+
+    // 세트·경기 종료 안내
+    const ov = $("#liveOverlay"), card = $("#liveCard");
+    if (sb.pause || sb.done) {
+      const last = sb.sets[sb.sets.length - 1];
+      const lw = last.a > last.b ? 0 : 1;
+      const setsTxt = sb.sets.map((s, i) => `${i + 1}세트 ${s.a}:${s.b}`).join(" · ");
+      if (sb.done) {
+        const w = d.won[0] > d.won[1] ? 0 : 1;
+        card.innerHTML = `<h3>경기 종료</h3>
+          <div>🏆 <b>${esc(sb.names[w])}</b> 승리!</div>
+          <div class="big">${esc(sb.names[0])} ${d.won[0]} : ${d.won[1]} ${esc(sb.names[1])}</div>
+          <div class="sets">${setsTxt}</div>
+          <div class="btns">
+            <button class="btn" data-a="undo">↶ 되돌리기</button>
+            ${sb.link ? `<button class="btn primary" data-a="save">대회 기록에 저장</button>` : ""}
+            <button class="btn ${sb.link ? "" : "primary"}" data-a="new">새 경기</button>
+            <button class="btn" data-a="exit">나가기</button>
+          </div>`;
+      } else {
+        card.innerHTML = `<h3>${d.setIdx}세트 종료</h3>
+          <div><b>${esc(sb.names[lw])}</b> 세트 승</div>
+          <div class="big">${last.a} : ${last.b}</div>
+          <div class="sets">세트 스코어 ${esc(sb.names[0])} ${d.won[0]} : ${d.won[1]} ${esc(sb.names[1])}<br>다음 세트는 코트를 바꿉니다.</div>
+          <div class="btns">
+            <button class="btn" data-a="undo">↶ 되돌리기</button>
+            <button class="btn primary" data-a="next">다음 세트 시작</button>
+          </div>`;
+      }
+      ov.classList.add("show");
+    } else {
+      ov.classList.remove("show");
+    }
+  }
+
+  $("#sideL").addEventListener("click", e => addPoint(Number(e.currentTarget.dataset.p)));
+  $("#sideR").addEventListener("click", e => addPoint(Number(e.currentTarget.dataset.p)));
+  $("#liveUndo").addEventListener("click", undo);
+  $("#liveSwap").addEventListener("click", () => {
+    if (!sb) return;
+    sb.manualSwap = !sb.manualSwap;
+    store.set("sb", sb);
+    renderLive();
+  });
+  $("#liveExit").addEventListener("click", closeLive);
+  $("#liveCard").addEventListener("click", e => {
+    const a = e.target.closest("[data-a]")?.dataset.a;
+    if (!a) return;
+    if (a === "undo") undo();
+    if (a === "next") { sb.pause = false; store.set("sb", sb); renderLive(); }
+    if (a === "exit") closeLive();
+    if (a === "new") { sb = null; store.del("sb"); closeLive(); }
+    if (a === "save") saveFromScoreboard();
+  });
+  document.addEventListener("keydown", e => {
+    if (!$("#live").classList.contains("show")) return;
+    if (e.key === "ArrowLeft") $("#sideL").click();
+    if (e.key === "ArrowRight") $("#sideR").click();
+    if (e.key === "Backspace" || (e.ctrlKey && e.key === "z")) { e.preventDefault(); undo(); }
+  });
+
+  async function saveFromScoreboard() {
+    const m = comp && findMatch(sb.link.matchId);
+    if (!m || m.p1 !== sb.link.p1 || m.p2 !== sb.link.p2) {
+      notify("대회에서 이 경기를 찾을 수 없습니다. 대진이 바뀌었거나 대회가 삭제되었을 수 있습니다.");
+      return;
+    }
+    const sets = sb.sets.map(s => [s.a, s.b]);
+    if (!(await setResult(m, sets))) return;
+    sb = null;
+    store.del("sb");
+    closeLive();
+    showTab("comp");
+    toast("대회 기록에 저장했습니다");
+  }
+
+  // =========================================================
+  // 대회 관리
+  // =========================================================
+  let comp = store.get("comp", null);
+  let compTab = store.get("compTab", "rank");
+  let filterPlayer = "", filterStatus = "all";
+  const saveComp = () => store.set("comp", comp);
+  const pname = id => comp.players.find(p => p.id === id)?.name ?? "?";
+
+  // ---------- 대회 만들기 ----------
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // 리그전: 모든 선수가 서로 한 번씩 (라운드별로 나눔)
+  function makeLeague(ids) {
+    const arr = ids.slice();
+    if (arr.length % 2) arr.push(null);
+    const n = arr.length, matches = [];
+    for (let r = 0; r < n - 1; r++) {
+      for (let i = 0; i < n / 2; i++) {
+        const a = arr[i], b = arr[n - 1 - i];
+        if (a != null && b != null) matches.push({ id: `L${r + 1}-${i}`, round: r + 1, p1: a, p2: b });
+      }
+      arr.splice(1, 0, arr.pop());
+    }
+    return matches;
+  }
+
+  // 토너먼트: 시드 순서대로 배치하고, 빈자리는 부전승
+  function seedOrder(size) {
+    let order = [1, 2];
+    while (order.length < size) {
+      const len = order.length * 2 + 1;
+      order = order.flatMap(s => [s, len - s]);
+    }
+    return order;
+  }
+
+  function createComp(f) {
+    const players = f.names.map((name, i) => ({ id: "p" + (i + 1), name }));
+    const c = {
+      name: f.name, type: f.type, bestOf: f.bestOf, primary: f.primary,
+      players, results: {}, created: Date.now(),
+    };
+    if (f.type === "league") {
+      c.matches = makeLeague(players.map(p => p.id));
+    } else {
+      const seeded = f.seeding === "random" ? shuffle(players) : players;
+      const size = 2 ** Math.ceil(Math.log2(players.length));
+      c.size = size;
+      c.slots = seedOrder(size).map(s => seeded[s - 1]?.id ?? null);
+    }
+    return c;
+  }
+
+  // ---------- 경기 목록 계산 ----------
+  function resultWinner(r) {
+    let a = 0, b = 0;
+    r.sets.forEach(([x, y]) => x > y ? a++ : b++);
+    return a > b ? r.p1 : r.p2;
+  }
+
+  function roundName(r, R) {
+    if (r === R - 1) return "결승";
+    return `${2 ** (R - r)}강`;
+  }
+
+  // 토너먼트 대진: 앞 경기 승자가 다음 경기로 올라갑니다
+  function resolveKnockout(c) {
+    const R = Math.log2(c.size), rounds = [];
+    let entrants = c.slots.slice();
+    for (let r = 0; r < R; r++) {
+      const ms = [];
+      for (let i = 0; i < entrants.length / 2; i++) {
+        const p1 = entrants[2 * i], p2 = entrants[2 * i + 1];
+        const m = { id: `K${r}-${i}`, round: r, idx: i, p1, p2, bye: false, ready: false, winner: undefined, result: null };
+        if (r === 0 && (p1 == null || p2 == null)) {
+          m.bye = true;
+          m.winner = p1 ?? p2;
+        } else if (p1 !== undefined && p2 !== undefined) {
+          m.ready = true;
+          const res = c.results[m.id];
+          if (res && res.p1 === p1 && res.p2 === p2) { m.result = res; m.winner = resultWinner(res); }
+        }
+        ms.push(m);
+      }
+      rounds.push(ms);
+      entrants = ms.map(m => m.winner);
+    }
+    return rounds;
+  }
+
+  function allMatches() {
+    if (comp.type === "league") {
+      return comp.matches.map(m => {
+        const res = comp.results[m.id] || null;
+        return { ...m, ready: true, bye: false, result: res, winner: res ? resultWinner(res) : undefined };
+      });
+    }
+    return resolveKnockout(comp).flat();
+  }
+  const findMatch = id => allMatches().find(m => m.id === id);
+  const playedMatches = () => allMatches().filter(m => m.result);
+
+  // 토너먼트에서 대진이 바뀌어 맞지 않게 된 결과를 지웁니다
+  function pruneKnockout() {
+    if (comp.type !== "knockout") return;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const valid = new Set(resolveKnockout(comp).flat().filter(m => m.result).map(m => m.id));
+      for (const id of Object.keys(comp.results)) {
+        if (!valid.has(id)) { delete comp.results[id]; changed = true; }
+      }
+    }
+  }
+
+  async function setResult(m, sets) {
+    if (comp.type === "knockout") {
+      const old = m.result ? resultWinner(m.result) : undefined;
+      const temp = { p1: m.p1, p2: m.p2, sets };
+      const neu = resultWinner(temp);
+      if (old !== undefined && old !== neu) {
+        const later = resolveKnockout(comp).flat().some(x => x.round > m.round && x.result && (x.p1 === old || x.p2 === old));
+        if (later && !(await ask("승자가 바뀌어서 이후 라운드의 관련 경기 결과가 지워집니다. 계속할까요?", { ok: "계속", danger: true }))) return false;
+      }
+    }
+    comp.results[m.id] = { p1: m.p1, p2: m.p2, sets };
+    pruneKnockout();
+    saveComp();
+    return true;
+  }
+
+  async function clearResult(m) {
+    const later = comp.type === "knockout" &&
+      resolveKnockout(comp).flat().some(x => x.round > m.round && x.result && (x.p1 === m.winner || x.p2 === m.winner));
+    const msg = later ? "이 경기와 이후 라운드의 관련 경기 결과가 함께 지워집니다. 지울까요?" : "이 경기 결과를 지울까요?";
+    if (!(await ask(msg, { ok: "지우기", danger: true }))) return false;
+    delete comp.results[m.id];
+    pruneKnockout();
+    saveComp();
+    return true;
+  }
+
+  // ---------- 선수 기록 ----------
+  function computeStats() {
+    const S = {};
+    comp.players.forEach(p => S[p.id] = { played: 0, w: 0, l: 0, sw: 0, sl: 0, pw: 0, pl: 0 });
+    playedMatches().forEach(m => {
+      const a = S[m.p1], b = S[m.p2];
+      const win = resultWinner(m.result);
+      a.played++; b.played++;
+      if (win === m.p1) { a.w++; b.l++; } else { b.w++; a.l++; }
+      m.result.sets.forEach(([x, y]) => {
+        if (x > y) { a.sw++; b.sl++; } else { b.sw++; a.sl++; }
+        a.pw += x; a.pl += y; b.pw += y; b.pl += x;
+      });
+    });
+    return S;
+  }
+
+  function ratioText(st) {
+    if (st.sl === 0) return st.sw > 0 ? "∞" : "-";
+    return (st.sw / st.sl).toFixed(3);
+  }
+
+  // 세트득실률 비교 (A가 높으면 양수)
+  function cmpRatio(A, B) {
+    const inf = s => s.sl === 0 && s.sw > 0;
+    if (inf(A) && inf(B)) return 0;
+    if (inf(A)) return 1;
+    if (inf(B)) return -1;
+    const ra = A.sl ? A.sw / A.sl : 0, rb = B.sl ? B.sw / B.sl : 0;
+    if (A.sl && B.sl) return Math.sign(A.sw * B.sl - B.sw * A.sl);
+    return Math.sign(ra - rb);
+  }
+
+  // 같은 조건인 선수들끼리의 맞대결 승수
+  function headToHead(group) {
+    const ids = new Set(group.map(r => r.p.id));
+    const wins = {};
+    group.forEach(r => wins[r.p.id] = 0);
+    playedMatches().forEach(m => {
+      if (ids.has(m.p1) && ids.has(m.p2)) wins[resultWinner(m.result)]++;
+    });
+    return wins;
+  }
+
+  // 같은 단계 안에서: 승자승 → 총 득점
+  function breakTies(rows, sameFn) {
+    const out = [];
+    let i = 0;
+    while (i < rows.length) {
+      let j = i;
+      while (j + 1 < rows.length && sameFn(rows[i], rows[j + 1])) j++;
+      const group = rows.slice(i, j + 1);
+      if (group.length > 1) {
+        const h = headToHead(group);
+        group.forEach(r => r.h2h = h[r.p.id]);
+        group.sort((x, y) => (y.h2h - x.h2h) || (y.st.pw - x.st.pw));
+        const h2hCount = v => group.filter(r => r.h2h === v).length;
+        group.forEach(r => {
+          const sameH = group.filter(o => o.h2h === r.h2h);
+          if (h2hCount(r.h2h) === 1) r.note = "승자승";
+          else if (sameH.filter(o => o.st.pw === r.st.pw).length === 1) r.note = "득점";
+          else r.note = "동률";
+        });
+      }
+      out.push(...group);
+      i = j + 1;
+    }
+    return out;
+  }
+
+  function rankLeague() {
+    const S = computeStats();
+    const primary = (x, y) => {
+      const byW = y.st.w - x.st.w;
+      const byR = -cmpRatio(x.st, y.st);
+      return comp.primary === "ratio" ? (byR || byW) : (byW || byR);
+    };
+    let rows = comp.players.map(p => ({ p, st: S[p.id] }));
+    rows.sort(primary);
+    rows = breakTies(rows, (a, b) => primary(a, b) === 0);
+    rows.forEach((r, k) => {
+      const prev = rows[k - 1];
+      const tied = prev && primary(prev, r) === 0 && (prev.h2h ?? 0) === (r.h2h ?? 0) && prev.st.pw === r.st.pw;
+      r.rank = tied ? prev.rank : k + 1;
+      r.label = r.rank + "위";
+    });
+    return rows;
+  }
+
+  function rankKnockout() {
+    const S = computeStats();
+    const rounds = resolveKnockout(comp), R = rounds.length;
+    const info = {};
+    comp.players.forEach(p => info[p.id] = { reached: 0, out: null });
+    rounds.forEach((ms, r) => ms.forEach(m => {
+      [m.p1, m.p2].forEach(id => { if (id != null && info[id]) info[id].reached = r; });
+      if (m.result) {
+        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+        info[loser].out = r;
+      }
+    }));
+    const champ = rounds[R - 1][0].winner;
+    if (champ) info[champ].reached = R;
+    const stage = id => info[id].reached;
+    const alive = id => info[id].out === null;
+    const cmp = (x, y) =>
+      (stage(y.p.id) - stage(x.p.id)) ||
+      ((alive(y.p.id) ? 1 : 0) - (alive(x.p.id) ? 1 : 0));
+    let rows = comp.players.map(p => ({ p, st: S[p.id] }));
+    rows.sort((x, y) => cmp(x, y) || -cmpRatio(x.st, y.st) || (y.st.pw - x.st.pw));
+    rows = breakTies(rows, (a, b) => cmp(a, b) === 0 && cmpRatio(a.st, b.st) === 0);
+    const outCount = {};
+    rows.forEach(r => { const o = info[r.p.id].out; if (o !== null) outCount[o] = (outCount[o] || 0) + 1; });
+    rows.forEach(r => {
+      const id = r.p.id, o = info[id].out;
+      r.note = undefined;
+      if (id === champ) { r.label = "🏆 우승"; r.rankNo = 1; }
+      else if (o === null) { r.label = "진행 중"; r.rankNo = 0; }
+      else if (o === R - 1) { r.label = "준우승"; r.rankNo = 2; }
+      else {
+        const n = 2 ** (R - 1 - o) + 1;
+        r.label = (outCount[o] > 1 ? "공동 " : "") + n + "위";
+        r.rankNo = n;
+        r.stageName = roundName(o, R) + " 탈락";
+      }
+    });
+    return rows;
+  }
+
+  // ---------- 화면 그리기 ----------
+  function renderComp() {
+    const root = $("#compRoot");
+    if (!comp) { renderCompSetup(root); return; }
+    const ms = allMatches().filter(m => !m.bye);
+    const total = comp.type === "league" ? ms.length : comp.players.length - 1;
+    const done = ms.filter(m => m.result).length;
+    const typeName = comp.type === "league" ? "리그전" : "토너먼트";
+    root.innerHTML = `
+      <div class="comp-head">
+        <div>
+          <h1>${esc(comp.name)}</h1>
+          <div class="meta">${typeName} · ${BO_NAME[comp.bestOf]} · ${comp.players.length}명 · 경기 ${done} / ${total} 완료</div>
+          <div class="progress"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
+        </div>
+        <div class="comp-actions">
+          <button class="btn small" id="exportBtn">백업 저장</button>
+          <button class="btn small" id="importBtn">백업 불러오기</button>
+          <button class="btn small danger" id="newCompBtn">새 대회</button>
+        </div>
+      </div>
+      <div class="subtabs">
+        <button data-st="rank">순위표</button>
+        <button data-st="matches">경기 결과 입력</button>
+        <button data-st="grid">${comp.type === "league" ? "대전표" : "대진표"}</button>
+      </div>
+      <div id="compBody"></div>`;
+    root.querySelectorAll(".subtabs button").forEach(b => {
+      b.classList.toggle("on", b.dataset.st === compTab);
+      b.onclick = () => { compTab = b.dataset.st; store.set("compTab", compTab); renderComp(); };
+    });
+    $("#exportBtn").onclick = openExport;
+    $("#importBtn").onclick = openImport;
+    $("#newCompBtn").onclick = async () => {
+      if (!(await ask("지금 대회 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 대회를 만들까요?", { ok: "새 대회 만들기", danger: true }))) return;
+      comp = null; store.del("comp"); renderComp();
+    };
+    const body = $("#compBody");
+    if (compTab === "rank") renderRank(body);
+    else if (compTab === "matches") renderMatches(body);
+    else if (comp.type === "league") renderCross(body);
+    else renderBracket(body);
+  }
+
+  function renderRank(body) {
+    const rows = comp.type === "league" ? rankLeague() : rankKnockout();
+    const rules = comp.type === "league"
+      ? (comp.primary === "ratio"
+          ? "순위 기준: ① 세트득실률 → ② 승수 → ③ 승자승(동률 선수끼리의 맞대결) → ④ 총 득점"
+          : "순위 기준: ① 승수 → ② 세트득실률 → ③ 승자승(동률 선수끼리의 맞대결) → ④ 총 득점")
+      : "순위 기준: 올라간 라운드 → 세트득실률 → 승자승 → 총 득점 (같은 라운드에서 탈락한 선수는 공동 순위)";
+    body.innerHTML = `
+      <div class="scroll-x"><table class="std">
+        <thead><tr>
+          <th>순위</th><th style="text-align:left">선수</th><th>경기</th><th>승</th><th>패</th>
+          <th>득세트</th><th>실세트</th><th>세트득실률</th><th>득점</th><th>실점</th>
+        </tr></thead>
+        <tbody>${rows.map(r => `
+          <tr>
+            <td class="rank ${r.rank === 1 || r.rankNo === 1 ? "r1" : ""}">${r.label}</td>
+            <td class="name"><button data-pid="${r.p.id}">${esc(r.p.name)}</button>${r.note ? `<span class="tag">${r.note}</span>` : ""}${r.stageName ? `<span class="tag">${r.stageName}</span>` : ""}</td>
+            <td>${r.st.played}</td>
+            <td class="w">${r.st.w}</td>
+            <td class="l">${r.st.l}</td>
+            <td>${r.st.sw}</td>
+            <td>${r.st.sl}</td>
+            <td><b>${ratioText(r.st)}</b></td>
+            <td>${r.st.pw}</td>
+            <td>${r.st.pl}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table></div>
+      <div class="rules">${rules}<br>세트득실률 = 얻은 세트 ÷ 잃은 세트 (잃은 세트가 없으면 ∞). 이름을 누르면 선수별 경기 기록을 볼 수 있습니다.</div>`;
+    body.querySelectorAll("[data-pid]").forEach(b => b.onclick = () => openPlayer(b.dataset.pid));
+  }
+
+  function matchRowHtml(m, roundLabel) {
+    const n1 = m.p1 === undefined ? `<span class="tbd">미정</span>` : esc(pname(m.p1));
+    const n2 = m.p2 === undefined ? `<span class="tbd">미정</span>` : esc(pname(m.p2));
+    let sc = `<span class="sc todo">입력</span>`, det = "";
+    if (m.result) {
+      let a = 0, b = 0;
+      m.result.sets.forEach(([x, y]) => x > y ? a++ : b++);
+      sc = `<span class="sc">${a} : ${b}</span>`;
+      det = `<span class="det">${m.result.sets.map(([x, y]) => `${x}-${y}`).join(", ")}</span>`;
+    } else if (!m.ready) {
+      sc = `<span class="sc todo">대기</span>`;
+    }
+    const w1 = m.result && m.winner === m.p1 ? "winner" : "";
+    const w2 = m.result && m.winner === m.p2 ? "winner" : "";
+    return `<button class="mrow" data-mid="${m.id}" ${m.ready ? "" : "disabled"} title="${roundLabel}">
+      <span class="n1 ${w1}">${n1}</span>${sc}<span class="n2 ${w2}">${n2}</span>${det}</button>`;
+  }
+
+  function renderMatches(body) {
+    const R = comp.type === "knockout" ? Math.log2(comp.size) : 0;
+    let ms = allMatches().filter(m => !m.bye);
+    if (filterPlayer) ms = ms.filter(m => m.p1 === filterPlayer || m.p2 === filterPlayer);
+    if (filterStatus === "todo") ms = ms.filter(m => !m.result);
+    if (filterStatus === "done") ms = ms.filter(m => m.result);
+    const groups = new Map();
+    ms.forEach(m => {
+      const key = comp.type === "league" ? `${m.round}라운드` : roundName(m.round, R);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(m);
+    });
+    body.innerHTML = `
+      <div class="filters">
+        <select id="fPlayer"><option value="">모든 선수</option>
+          ${comp.players.map(p => `<option value="${p.id}" ${p.id === filterPlayer ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
+        </select>
+        <select id="fStatus">
+          <option value="all">전체 경기</option>
+          <option value="todo" ${filterStatus === "todo" ? "selected" : ""}>남은 경기</option>
+          <option value="done" ${filterStatus === "done" ? "selected" : ""}>끝난 경기</option>
+        </select>
+      </div>
+      ${groups.size ? [...groups].map(([k, list]) =>
+        `<div class="round-title">${k}</div>${list.map(m => matchRowHtml(m, k)).join("")}`).join("")
+        : `<p class="hint">해당하는 경기가 없습니다.</p>`}
+      <p class="rules">경기를 누르면 세트별 점수를 입력하거나, 점수판으로 경기를 진행할 수 있습니다.</p>`;
+    $("#fPlayer").onchange = e => { filterPlayer = e.target.value; renderComp(); };
+    $("#fStatus").onchange = e => { filterStatus = e.target.value; renderComp(); };
+    body.querySelectorAll("[data-mid]").forEach(b => b.onclick = () => openMatch(b.dataset.mid));
+  }
+
+  function renderCross(body) {
+    const res = {};
+    playedMatches().forEach(m => {
+      let a = 0, b = 0;
+      m.result.sets.forEach(([x, y]) => x > y ? a++ : b++);
+      res[m.p1 + "|" + m.p2] = { me: a, op: b, id: m.id };
+      res[m.p2 + "|" + m.p1] = { me: b, op: a, id: m.id };
+    });
+    const idOf = {};
+    comp.matches.forEach(m => { idOf[m.p1 + "|" + m.p2] = m.id; idOf[m.p2 + "|" + m.p1] = m.id; });
+    body.innerHTML = `
+      <div class="scroll-x" style="display:inline-block;max-width:100%"><table class="cross">
+        <thead><tr><th></th>${comp.players.map(p => `<th class="top">${esc(p.name)}</th>`).join("")}</tr></thead>
+        <tbody>${comp.players.map(r => `<tr><th style="text-align:left">${esc(r.name)}</th>${comp.players.map(c => {
+          if (r.id === c.id) return `<td class="self"></td>`;
+          const x = res[r.id + "|" + c.id];
+          const cls = x ? (x.me > x.op ? "won" : "lost") : "";
+          return `<td class="${cls}"><button data-mid="${idOf[r.id + "|" + c.id]}">${x ? `${x.me}:${x.op}` : "·"}</button></td>`;
+        }).join("")}</tr>`).join("")}</tbody>
+      </table></div>
+      <p class="rules">가로줄 선수 기준 세트 스코어입니다. 초록색은 승, 빨간색은 패. 칸을 누르면 결과를 입력합니다.</p>`;
+    body.querySelectorAll("[data-mid]").forEach(b => b.onclick = () => openMatch(b.dataset.mid));
+  }
+
+  function renderBracket(body) {
+    const rounds = resolveKnockout(comp), R = rounds.length;
+    const line = (m, id) => {
+      if (id === null) return `<div class="line lose"><span class="tbd">부전승 (빈자리)</span></div>`;
+      if (id === undefined) return `<div class="line"><span class="tbd">미정</span></div>`;
+      let s = "";
+      if (m.result) {
+        let a = 0, b = 0;
+        m.result.sets.forEach(([x, y]) => x > y ? a++ : b++);
+        s = id === m.p1 ? a : b;
+      } else if (m.bye) s = "부전승";
+      const cls = m.winner === undefined ? "" : (m.winner === id ? "win" : "lose");
+      return `<div class="line ${cls}"><span>${esc(pname(id))}</span><span class="s">${s}</span></div>`;
+    };
+    const champ = rounds[R - 1][0].winner;
+    body.innerHTML = `<div class="bracket">${rounds.map((ms, r) => `
+      <div class="bcol"><h4>${roundName(r, R)}</h4><div class="slots">
+        ${ms.map(m => `<button class="bm" data-mid="${m.id}" ${m.ready ? "" : "disabled"}>${line(m, m.p1)}${line(m, m.p2)}</button>`).join("")}
+      </div></div>`).join("")}</div>
+      ${champ ? `<div class="champ">🏆 우승: ${esc(pname(champ))}</div>` : ""}
+      <p class="rules">대진은 시드 순서로 배정되며, 인원이 ${comp.size}명보다 적으면 상위 시드가 1라운드를 부전승으로 올라갑니다. 경기를 누르면 결과를 입력합니다.</p>`;
+    body.querySelectorAll("[data-mid]").forEach(b => b.onclick = () => openMatch(b.dataset.mid));
+  }
+
+  function renderCompSetup(root) {
+    const f = store.get("compDraft", { name: "", type: "league", bestOf: 3, primary: "wins", seeding: "order", names: "" });
+    root.innerHTML = `
+      <h1 class="page-title">대회 관리</h1>
+      <p class="lead">${MIN_PLAYERS}~${MAX_PLAYERS}명의 선수로 리그전이나 토너먼트를 만들고, 경기 결과를 입력하면 승패·세트득실률·순위를 자동으로 계산합니다.</p>
+      <div class="card narrow">
+        <div class="label">대회 이름</div>
+        <input type="text" id="cName" placeholder="예: 10월 동호회 리그" value="${esc(f.name)}" maxlength="40">
+
+        <div class="label">대회 방식</div>
+        <div class="seg" id="cType">
+          <button data-v="league">리그전</button>
+          <button data-v="knockout">토너먼트</button>
+        </div>
+        <p class="hint" id="cTypeHint"></p>
+
+        <div class="label">경기 방식 (11점)</div>
+        <div class="seg" id="cBo">
+          <button data-v="1">1전1선승</button>
+          <button data-v="3">3전2선승</button>
+          <button data-v="5">5전3선승</button>
+          <button data-v="7">7전4선승</button>
+        </div>
+
+        <div id="cPrimaryBox">
+          <div class="label">순위 1순위 기준</div>
+          <div class="seg" id="cPrimary">
+            <button data-v="wins">승수 우선</button>
+            <button data-v="ratio">세트득실률 우선</button>
+          </div>
+          <p class="hint">동률이면 세트득실률(또는 승수) → 승자승 → 총 득점 순으로 순위를 정합니다.</p>
+        </div>
+
+        <div id="cSeedBox">
+          <div class="label">대진 배정</div>
+          <div class="seg" id="cSeed">
+            <button data-v="order">입력 순서 = 시드</button>
+            <button data-v="random">무작위 추첨</button>
+          </div>
+          <p class="hint">입력 순서로 하면 맨 위 선수가 1번 시드입니다. 상위 시드는 부전승을 먼저 받습니다.</p>
+        </div>
+
+        <div class="label">선수 명단 (한 줄에 한 명)</div>
+        <textarea id="cNames" rows="10" placeholder="홍길동&#10;김철수&#10;이영희&#10;...">${esc(f.names)}</textarea>
+        <div class="count" id="cCount"><span></span><button class="btn small" id="cSample" type="button">예시 이름 넣기</button></div>
+
+        <div class="error" id="cErr"></div>
+        <button class="btn primary big" id="cCreate">대회 만들기</button>
+        <p class="hint center"><button class="btn small" id="cImport" type="button">백업 파일 불러오기</button></p>
+      </div>`;
+    const saveDraft = () => store.set("compDraft", f);
+    const paint = () => {
+      $("#cPrimaryBox").style.display = f.type === "league" ? "" : "none";
+      $("#cSeedBox").style.display = f.type === "knockout" ? "" : "none";
+      $("#cTypeHint").textContent = f.type === "league"
+        ? "모든 선수가 서로 한 번씩 경기합니다. (예: 12명이면 66경기)"
+        : "지면 탈락하고 이긴 선수만 다음 라운드로 올라갑니다.";
+      const names = parseNames($("#cNames").value);
+      const cnt = $("#cCount");
+      cnt.querySelector("span").textContent = `${names.length}명 (${MIN_PLAYERS}~${MAX_PLAYERS}명)`;
+      cnt.classList.toggle("bad", names.length > 0 && (names.length < MIN_PLAYERS || names.length > MAX_PLAYERS));
+    };
+    makeSeg($("#cType"), f.type, v => { f.type = v; saveDraft(); paint(); });
+    makeSeg($("#cBo"), f.bestOf, v => { f.bestOf = Number(v); saveDraft(); });
+    makeSeg($("#cPrimary"), f.primary, v => { f.primary = v; saveDraft(); });
+    makeSeg($("#cSeed"), f.seeding, v => { f.seeding = v; saveDraft(); });
+    $("#cName").oninput = e => { f.name = e.target.value; saveDraft(); };
+    $("#cNames").oninput = e => { f.names = e.target.value; saveDraft(); paint(); };
+    $("#cSample").onclick = () => {
+      const sample = ["김민준", "이서연", "박지호", "최수아", "정우진", "강하은", "조현우", "윤지민", "장도윤", "임서준", "한예린", "오승현"];
+      $("#cNames").value = f.names = sample.join("\n");
+      saveDraft(); paint();
+    };
+    $("#cImport").onclick = openImport;
+    $("#cCreate").onclick = () => {
+      const names = parseNames($("#cNames").value);
+      const err = $("#cErr");
+      if (names.length < MIN_PLAYERS || names.length > MAX_PLAYERS) { err.textContent = `선수는 ${MIN_PLAYERS}명에서 ${MAX_PLAYERS}명까지 입력해 주세요. (지금 ${names.length}명)`; return; }
+      const dup = names.find((n, i) => names.indexOf(n) !== i);
+      if (dup) { err.textContent = `같은 이름이 두 번 있습니다: ${dup}`; return; }
+      comp = createComp({ ...f, name: f.name.trim() || "탁구 대회", names });
+      compTab = "matches"; store.set("compTab", compTab);
+      filterPlayer = ""; filterStatus = "all";
+      saveComp();
+      renderComp();
+      toast("대회를 만들었습니다");
+    };
+    paint();
+  }
+
+  function parseNames(text) {
+    return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  }
+
+  // ---------- 경기 결과 입력 ----------
+  function openMatch(id) {
+    const m = findMatch(id);
+    if (!m || !m.ready) return;
+    const bo = comp.bestOf, n = need(bo);
+    const sets = m.result ? m.result.sets : [];
+    const R = comp.type === "knockout" ? Math.log2(comp.size) : 0;
+    const roundLabel = comp.type === "league" ? `${m.round}라운드` : roundName(m.round, R);
+    openModal(`
+      <h3>경기 결과 · ${roundLabel}</h3>
+      <div class="vs"><span class="a"><span class="dot red"></span> ${esc(pname(m.p1))}</span><span>vs</span><span>${esc(pname(m.p2))} <span class="dot blue"></span></span></div>
+      ${Array.from({ length: bo }, (_, i) => `
+        <div class="setrow"><span class="no">${i + 1}세트</span>
+          <input type="number" inputmode="numeric" min="0" max="99" data-s="${i}" data-k="0" value="${sets[i]?.[0] ?? ""}">
+          <span>:</span>
+          <input type="number" inputmode="numeric" min="0" max="99" data-s="${i}" data-k="1" value="${sets[i]?.[1] ?? ""}">
+        </div>`).join("")}
+      <div class="summary" id="mSum"></div>
+      <div class="error" id="mErr"></div>
+      <div class="btns">
+        ${m.result ? `<button class="btn danger" id="mDel">결과 삭제</button>` : ""}
+        <button class="btn" id="mLive">점수판으로 경기하기</button>
+        <button class="btn" id="mCancel">취소</button>
+        <button class="btn primary" id="mSave">저장</button>
+      </div>`);
+
+    const read = () => {
+      const rows = [];
+      for (let i = 0; i < bo; i++) {
+        const x = $(`[data-s="${i}"][data-k="0"]`).value.trim();
+        const y = $(`[data-s="${i}"][data-k="1"]`).value.trim();
+        rows.push([x, y]);
+      }
+      return rows;
+    };
+    const check = () => {
+      const rows = read();
+      const sets = [];
+      let ended = false;
+      for (let i = 0; i < rows.length; i++) {
+        const [x, y] = rows[i];
+        if (x === "" && y === "") { ended = true; continue; }
+        if (ended) return { err: `${i}세트가 비어 있습니다. 세트를 순서대로 입력해 주세요.` };
+        if (x === "" || y === "") return { err: `${i + 1}세트 점수를 양쪽 모두 입력해 주세요.` };
+        const a = Number(x), b = Number(y);
+        if (!validSet(a, b)) return { err: `${i + 1}세트 ${a}:${b}는 맞지 않는 점수입니다. (11점 선승, 10:10 이후에는 2점 차)` };
+        sets.push([a, b]);
+      }
+      let wa = 0, wb = 0;
+      for (let i = 0; i < sets.length; i++) {
+        if (wa >= n || wb >= n) return { err: `이미 ${i}세트에서 승부가 났습니다. ${i + 1}세트부터는 비워 주세요.`, sets };
+        sets[i][0] > sets[i][1] ? wa++ : wb++;
+      }
+      return { sets, wa, wb, done: wa >= n || wb >= n };
+    };
+    const refresh = () => {
+      const r = check();
+      $("#mErr").textContent = r.err || "";
+      if (r.sets && !r.err) {
+        $("#mSum").innerHTML = r.done
+          ? `세트 스코어 ${r.wa} : ${r.wb} — <span class="w">${esc(pname(r.wa > r.wb ? m.p1 : m.p2))} 승</span>`
+          : (r.sets.length ? `세트 스코어 ${r.wa} : ${r.wb} (아직 승부가 나지 않음)` : "");
+      } else $("#mSum").textContent = "";
+      return r;
+    };
+    document.querySelectorAll("#modal input").forEach(inp => inp.addEventListener("input", refresh));
+    refresh();
+
+    $("#mCancel").onclick = closeModal;
+    $("#mSave").onclick = async () => {
+      const r = refresh();
+      if (r.err) return;
+      if (!r.done) { $("#mErr").textContent = `한 선수가 ${n}세트를 먼저 이겨야 경기가 끝납니다.`; return; }
+      if (await setResult(m, r.sets)) { closeModal(); renderComp(); toast("저장했습니다"); }
+    };
+    if (m.result) $("#mDel").onclick = async () => {
+      if (await clearResult(m)) { closeModal(); renderComp(); }
+    };
+    $("#mLive").onclick = async () => {
+      if (sb && !sb.done && !(await ask("점수판에 진행 중인 다른 경기가 있습니다. 새로 시작할까요?", { ok: "새로 시작" }))) return;
+      closeModal();
+      startScoreboard({
+        names: [pname(m.p1), pname(m.p2)], hc: 0, bestOf: comp.bestOf, first: 0,
+        link: { matchId: m.id, p1: m.p1, p2: m.p2 },
+      });
+    };
+  }
+
+  // ---------- 선수별 기록 ----------
+  function openPlayer(pid) {
+    const S = computeStats()[pid];
+    const list = allMatches().filter(m => !m.bye && (m.p1 === pid || m.p2 === pid));
+    const items = list.map(m => {
+      const op = m.p1 === pid ? m.p2 : m.p1;
+      const opName = op === undefined ? "미정" : esc(pname(op));
+      if (!m.result) return `<div class="it"><span>vs ${opName}</span><span class="d">경기 전</span></div>`;
+      let me = 0, ot = 0;
+      const det = m.result.sets.map(([x, y]) => m.p1 === pid ? `${x}-${y}` : `${y}-${x}`);
+      m.result.sets.forEach(([x, y]) => ((x > y) === (m.p1 === pid)) ? me++ : ot++);
+      const win = m.winner === pid;
+      return `<div class="it"><span>vs ${opName}<br><span class="d">${det.join(", ")}</span></span>
+        <span class="${win ? "w" : "l"}">${win ? "승" : "패"} ${me}:${ot}</span></div>`;
+    }).join("");
+    openModal(`
+      <h3>선수 기록</h3>
+      <div class="label">이름</div>
+      <div style="display:flex;gap:8px"><input type="text" id="pName" value="${esc(pname(pid))}" maxlength="20"><button class="btn" id="pRename">이름 변경</button></div>
+      <p style="margin:14px 0 0"><span class="w">${S.w}승</span> <span class="l">${S.l}패</span> · 세트 ${S.sw}:${S.sl} (득실률 ${ratioText(S)}) · 점수 ${S.pw}:${S.pl}</p>
+      <div class="plist">${items || `<p class="hint">경기가 없습니다.</p>`}</div>
+      <div class="btns"><button class="btn primary" id="pClose">닫기</button></div>`);
+    $("#pClose").onclick = closeModal;
+    $("#pRename").onclick = () => {
+      const v = $("#pName").value.trim();
+      if (!v) return;
+      if (comp.players.some(p => p.id !== pid && p.name === v)) { notify("같은 이름의 선수가 이미 있습니다."); return; }
+      comp.players.find(p => p.id === pid).name = v;
+      saveComp(); closeModal(); renderComp(); toast("이름을 바꿨습니다");
+    };
+  }
+
+  // ---------- 백업 ----------
+  // 휴대폰 앱에서는 파일 내려받기가 막혀 있을 수 있어서, 백업을 글자(코드)로도 복사할 수 있게 합니다
+  function openExport() {
+    const text = JSON.stringify({ app: "pingpong", version: 1, comp });
+    openModal(`
+      <h3>백업 저장</h3>
+      <p class="hint" style="margin-top:0">아래 백업 코드를 복사해서 카카오톡 나에게 보내기나 메모장에 붙여 두세요. 나중에 '백업 불러오기'에 붙여 넣으면 그대로 돌아옵니다.</p>
+      <textarea id="bkText" rows="6" readonly>${esc(text)}</textarea>
+      <div class="btns">
+        <button class="btn" id="bkFile">파일로 저장</button>
+        <button class="btn" id="bkClose">닫기</button>
+        <button class="btn primary" id="bkCopy">백업 코드 복사</button>
+      </div>`);
+    $("#bkClose").onclick = closeModal;
+    $("#bkCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(text); toast("복사했습니다"); }
+      catch { const t = $("#bkText"); t.focus(); t.select(); toast("선택된 글자를 길게 눌러 복사하세요"); }
+    };
+    $("#bkFile").onclick = () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      a.download = `${comp.name.replace(/[\\/:*?"<>|]/g, "_")}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+  }
+
+  function openImport() {
+    openModal(`
+      <h3>백업 불러오기</h3>
+      <p class="hint" style="margin-top:0">복사해 둔 백업 코드를 붙여 넣거나, 백업 파일을 고르세요.</p>
+      <textarea id="imText" rows="6" placeholder="여기에 백업 코드 붙여 넣기"></textarea>
+      <div class="error" id="imErr"></div>
+      <div class="btns">
+        <button class="btn" id="imFile">파일 고르기</button>
+        <button class="btn" id="imClose">취소</button>
+        <button class="btn primary" id="imGo">불러오기</button>
+      </div>`);
+    $("#imClose").onclick = closeModal;
+    $("#imFile").onclick = () => $("#importFile").click();
+    $("#imGo").onclick = () => importText($("#imText").value);
+  }
+
+  async function importText(text) {
+    let c;
+    try {
+      c = JSON.parse(text).comp;
+      if (!c || !Array.isArray(c.players) || !c.results || !["league", "knockout"].includes(c.type)) throw new Error();
+    } catch {
+      const err = $("#imErr");
+      if (err) err.textContent = "백업 코드가 올바르지 않습니다. 처음부터 끝까지 빠짐없이 붙여 넣었는지 확인해 주세요.";
+      return;
+    }
+    if (comp && !(await ask("지금 대회를 백업의 대회로 바꿀까요?", { ok: "바꾸기", danger: true }))) return;
+    comp = c; saveComp(); closeModal(); renderComp(); toast("백업을 불러왔습니다");
+  }
+
+  $("#importFile").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (file) importText(await file.text());
+  });
+
+  // =========================================================
+  // 시작
+  // =========================================================
+  showTab(store.get("tab", "score"));
+})();
+</script>
+<script>
+  // 인터넷 없이도 열리도록 앱 파일을 휴대폰에 저장합니다
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+</script>
+</body>
+</html>
