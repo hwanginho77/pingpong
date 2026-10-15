@@ -1788,20 +1788,32 @@
   // =========================================================
   // 팀전
   // =========================================================
-  // 오더 기본값: 우리 팀 선수 순서 A·B·C (0·1·2), 상대 팀 X·Y·Z (0·1·2)
-  // min = 팀에 필요한 최소 인원
+  // 오더 기본값: 우리 팀 선수 순서 A·B·C·D·E (0~4), 상대 팀 X·Y·Z·W·V (0~4)
+  // size = 몇 인 팀전용인지, need = 이겨야 하는 개인 경기 수
+  // (예전 대회와 맞추려고 3인 팀전의 이름표 ssdss·s5·ssd·sds는 그대로 둡니다)
+  const S = (a, b) => ["S", [a], [b]], D = (a, b) => ["D", a, b];
   const TEAM_FORMATS = {
-    ssdss: { name: "단·단·복·단·단", need: 3, min: 3, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["D", [1, 2], [1, 2]], ["S", [0], [1]], ["S", [2], [2]]] },
-    s5:    { name: "5단식", need: 3, min: 3, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["S", [2], [2]], ["S", [0], [1]], ["S", [1], [0]]] },
-    ssd:   { name: "단·단·복", need: 2, min: 2, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["D", [2, 0], [2, 0]]] },
-    sds:   { name: "단·복·단", need: 2, min: 2, rubbers: [["S", [0], [0]], ["D", [1, 2], [1, 2]], ["S", [1], [1]]] },
+    "2ssd":   { size: 2, name: "단·단·복", need: 2, rubbers: [S(0, 0), S(1, 1), D([0, 1], [0, 1])] },
+    "2sds":   { size: 2, name: "단·복·단", need: 2, rubbers: [S(0, 0), D([0, 1], [0, 1]), S(1, 1)] },
+    ssdss:    { size: 3, name: "단·단·복·단·단", need: 3, rubbers: [S(0, 0), S(1, 1), D([1, 2], [1, 2]), S(0, 1), S(2, 2)] },
+    s5:       { size: 3, name: "5단식", need: 3, rubbers: [S(0, 0), S(1, 1), S(2, 2), S(0, 1), S(1, 0)] },
+    ssd:      { size: 3, name: "단·단·복", need: 2, rubbers: [S(0, 0), S(1, 1), D([2, 0], [2, 0])] },
+    sds:      { size: 3, name: "단·복·단", need: 2, rubbers: [S(0, 0), D([1, 2], [1, 2]), S(1, 1)] },
+    "4ssdss": { size: 4, name: "단·단·복·단·단", need: 3, rubbers: [S(0, 0), S(1, 1), D([2, 3], [2, 3]), S(0, 1), S(1, 0)] },
+    "4s5":    { size: 4, name: "5단식", need: 3, rubbers: [S(0, 0), S(1, 1), S(2, 2), S(3, 3), S(0, 1)] },
+    "5s5":    { size: 5, name: "5단식", need: 3, rubbers: [S(0, 0), S(1, 1), S(2, 2), S(3, 3), S(4, 4)] },
+    "5ssdss": { size: 5, name: "단·단·복·단·단", need: 3, rubbers: [S(0, 0), S(1, 1), D([3, 4], [3, 4]), S(2, 2), S(0, 1)] },
   };
-  const FORMAT_HINT = {
-    ssdss: "1단식 A–X · 2단식 B–Y · 복식 B·C–Y·Z · 3단식 A–Y · 4단식 C–Z, 먼저 3승 (팀당 3명 이상)",
-    s5: "A–X · B–Y · C–Z · A–Y · B–X, 먼저 3승 (팀당 3명 이상)",
-    ssd: "1단식 A–X · 2단식 B–Y · 복식 C·A–Z·X (2명 팀은 A·B–X·Y), 먼저 2승",
-    sds: "1단식 A–X · 복식 B·C–Y·Z (2명 팀은 A·B–X·Y) · 2단식 B–Y, 먼저 2승",
-  };
+  Object.values(TEAM_FORMATS).forEach(f => f.min = f.size);
+  const TEAM_SIZES = [2, 3, 4, 5];
+  const HOME = "ABCDE", AWAY = "XYZWV";
+  // 기본 오더를 글로 풀어 씁니다: "1단식 A–X · 2단식 B–Y · 복식 C·D–Z·W …, 먼저 3승"
+  function formatHint(key) {
+    const f = TEAM_FORMATS[key];
+    const labels = rubberLabels(f);
+    const parts = f.rubbers.map(([, h, a], i) => `${labels[i]} ${h.map(k => HOME[k]).join("·")}–${a.map(k => AWAY[k]).join("·")}`);
+    return `${parts.join(" · ")}, 먼저 ${f.need}승`;
+  }
   // 기본 오더: 정한 순번의 선수가 없으면(2명 팀 등) 아직 안 쓴 선수로 채웁니다
   function defaultLineup(team, idxs) {
     const n = team.players.length, used = new Set();
@@ -2092,7 +2104,7 @@
       const name = line.slice(0, at).trim();
       const players = line.slice(at + 1).split(/[,，、]/).map(s => s.trim()).filter(Boolean).map(parseEntry);
       if (!name) return { err: `${i + 1}번째 줄에 팀 이름이 없습니다.` };
-      if (players.length < 2 || players.length > 6) return { err: `${name} 팀의 선수는 2~6명이어야 합니다. (지금 ${players.length}명)` };
+      if (players.length < 2 || players.length > 8) return { err: `${name} 팀의 선수는 2~8명이어야 합니다. (지금 ${players.length}명)` };
       if (new Set(players.map(p => p.name)).size !== players.length) return { err: `${name} 팀에 같은 이름의 선수가 있습니다.` };
       teams.push({ name, players });
     }
@@ -2106,7 +2118,7 @@
       id: "t" + (i + 1), name: t.name,
       players: t.players.map((p, j) => ({ id: `t${i + 1}p${j + 1}`, name: p.name, div: p.div })),
     }));
-    const c = { name: f.name, mode: f.mode, format: f.format, bestOf: f.bestOf, useHc: f.useHc !== false, teams, results: {}, created: Date.now() };
+    const c = { name: f.name, mode: f.mode, format: f.format, teamSize: f.teamSize, bestOf: f.bestOf, useHc: f.useHc !== false, teams, results: {}, created: Date.now() };
     const order = (f.seeding === "random" ? shuffle(teams) : teams).map(t => t.id);
     if (f.mode === "league") c.matches = makeLeague(teams.map(t => t.id));
     else if (f.mode === "knockout") {
@@ -2155,13 +2167,13 @@
           <p class="hint" id="tfGroupHint"></p>
         </div>
 
-        <div class="label">팀 경기 방식</div>
-        <div class="seg" id="tfFormat">
-          <button data-v="ssdss">단·단·복·단·단</button>
-          <button data-v="s5">5단식</button>
-          <button data-v="ssd">단·단·복</button>
-          <button data-v="sds">단·복·단</button>
+        <div class="label">팀 인원</div>
+        <div class="seg" id="tfSize">
+          ${TEAM_SIZES.map(n => `<button data-v="${n}">${n}인 팀전</button>`).join("")}
         </div>
+
+        <div class="label">팀 경기 방식</div>
+        <div class="seg" id="tfFormat"></div>
         <p class="hint" id="tfFormatHint"></p>
 
         <div class="label">개인 경기 방식 (11점)</div>
@@ -2191,7 +2203,7 @@
         <div class="label">팀 명단 (한 줄에 한 팀)</div>
         <textarea id="tfText" rows="12" placeholder="번개: 김민준 2부, 이서연 4부, 박지호 6부&#10;스매시: 최수아 S급, 정우진 5부, 강하은 7부&#10;...">${esc(f.text)}</textarea>
         <div class="count" id="tfCount"><span></span><button class="btn small" id="tfSample" type="button">예시 12팀 넣기</button></div>
-        <p class="hint">'팀이름: 선수1 3부, 선수2 5부, 선수3 S급' 모양으로 적어 주세요. 선수는 2~6명(후보 포함)이고, 적은 순서대로 A·B·C 오더가 됩니다. 2명 팀은 단·단·복이나 단·복·단으로 해 주세요. 부수를 안 적으면 그 선수의 핸디캡은 0점입니다.</p>
+        <p class="hint" id="tfRosterHint"></p>
 
         <div class="error" id="tfErr"></div>
         <button class="btn primary big" id="tfCreate">팀전 만들기</button>
@@ -2208,7 +2220,9 @@
         knockout: "지면 탈락하고 이긴 팀만 다음 라운드로 올라갑니다.",
         groups: "조별로 리그를 한 뒤, 조 상위 팀이 본선 토너먼트에 올라갑니다.",
       }[f.mode];
-      $("#tfFormatHint").textContent = FORMAT_HINT[f.format] + ". 오더는 경기마다 바꿀 수 있습니다.";
+      $("#tfFormatHint").textContent = formatHint(f.format) + ". 오더는 경기마다 바꿀 수 있습니다.";
+      const n = f.teamSize, letters = HOME.slice(0, n).split("").join("·");
+      $("#tfRosterHint").innerHTML = `'팀이름: 선수1 3부, 선수2 5부${n > 2 ? ", …" : ""}' 모양으로 적어 주세요. 팀마다 <b>${n}명 이상</b>(후보 포함 최대 ${n + 3}명)이고, 적은 순서대로 ${letters} 오더가 됩니다. 부수를 안 적으면 그 선수의 핸디캡은 0점입니다.`;
       // 조 개수 / 진출 팀 수 고르기
       // 팀을 아직 안 적었으면 고른 값을 줄이지 않습니다
       const maxG = T >= 4 ? Math.min(8, Math.floor(T / 2)) : 8;
@@ -2230,7 +2244,16 @@
       cnt.classList.toggle("bad", T > 0 && (T < MIN_TEAMS || T > MAX_TEAMS));
     };
     makeSeg($("#tfMode"), f.mode, v => { f.mode = v; save(); paint(); });
-    makeSeg($("#tfFormat"), f.format, v => { f.format = v; save(); paint(); });
+    // 팀 인원에 맞는 경기 방식만 보여 줍니다
+    f.teamSize = f.teamSize ?? TEAM_FORMATS[f.format]?.size ?? 3;
+    const paintFormats = () => {
+      const keys = Object.keys(TEAM_FORMATS).filter(k => TEAM_FORMATS[k].size === f.teamSize);
+      if (!keys.includes(f.format)) f.format = keys[0];
+      $("#tfFormat").innerHTML = keys.map(k => `<button data-v="${k}">${TEAM_FORMATS[k].name}</button>`).join("");
+      makeSeg($("#tfFormat"), f.format, v => { f.format = v; save(); paint(); });
+    };
+    paintFormats();
+    makeSeg($("#tfSize"), f.teamSize, v => { f.teamSize = Number(v); paintFormats(); save(); paint(); });
     makeSeg($("#tfBo"), f.bestOf, v => { f.bestOf = Number(v); save(); });
     makeSeg($("#tfSeed"), f.seeding, v => { f.seeding = v; save(); });
     makeSeg($("#tfHc"), f.useHc === false ? "off" : "on", v => { f.useHc = v === "on"; save(); });
@@ -2243,8 +2266,12 @@
       const sur = "김이박최정강조윤장임한오서신권황안송";
       const giv = ["민준", "서연", "지호", "수아", "우진", "하은", "현우", "지민", "도윤", "서준", "예린", "승현"];
       const divs = ["S급", "1부", "2부", "3부", "4부", "5부", "6부", "7부", "8부", "9부"];
+      const members = Array.from({ length: f.teamSize }, (_, k) => k);
       $("#tfText").value = f.text = tn.map((n, i) =>
-        `${n}: ${[0, 1, 2].map(k => sur[(i * 3 + k) % sur.length] + giv[(i * 5 + k * 7) % giv.length] + " " + divs[(i + k * 3) % divs.length]).join(", ")}`).join("\n");
+        `${n}: ${members.map(k => {
+          const idx = i * f.teamSize + k;   // 팀끼리 이름이 겹치지 않게
+          return sur[idx % sur.length] + giv[(idx + Math.floor(idx / sur.length) * 5) % giv.length] + " " + divs[(i + k * 3) % divs.length];
+        }).join(", ")}`).join("\n");
       save(); paint();
     };
     $("#tfImport").onclick = openImport;
@@ -2257,7 +2284,9 @@
       if (T < MIN_TEAMS || T > MAX_TEAMS) { err.textContent = `팀은 ${MIN_TEAMS}팀에서 ${MAX_TEAMS}팀까지 만들 수 있습니다. (지금 ${T}팀)`; return; }
       const fmt = TEAM_FORMATS[f.format];
       const small = r.teams.find(t => t.players.length < fmt.min);
-      if (small) { err.textContent = `${fmt.name} 방식은 팀당 ${fmt.min}명 이상이 필요합니다. (${small.name} 팀은 ${small.players.length}명) 단·단·복이나 단·복·단을 고르거나 선수를 더 적어 주세요.`; return; }
+      if (small) { err.textContent = `${f.teamSize}인 팀전은 팀마다 ${fmt.min}명 이상이 필요합니다. (${small.name} 팀은 ${small.players.length}명) 선수를 더 적거나 팀 인원을 바꿔 주세요.`; return; }
+      const big = r.teams.find(t => t.players.length > f.teamSize + 3);
+      if (big) { err.textContent = `${f.teamSize}인 팀전은 후보를 포함해 팀마다 ${f.teamSize + 3}명까지 적을 수 있습니다. (${big.name} 팀은 ${big.players.length}명)`; return; }
       if (f.mode === "groups" && T < 4) { err.textContent = "조별 리그는 4팀 이상일 때 만들 수 있습니다."; return; }
       if (f.mode === "groups" && f.groups > Math.floor(T / 2)) { err.textContent = `${T}팀이면 조는 ${Math.floor(T / 2)}개까지 만들 수 있습니다.`; return; }
       if (f.mode === "groups" && f.advance > Math.floor(T / f.groups)) { err.textContent = "조별 본선 진출 팀 수가 한 조의 팀 수보다 많습니다."; return; }
@@ -2285,7 +2314,7 @@
       <div class="comp-head">
         <div>
           <h1>${esc(tcomp.name)}</h1>
-          <div class="meta">${MODE_NAME[tcomp.mode]} · ${tFmt().name} · 개인 ${BO_NAME[tcomp.bestOf]} · ${T}팀 · 대전 ${done} / ${total} 완료</div>
+          <div class="meta">${tcomp.teamSize ?? tFmt().size}인 ${MODE_NAME[tcomp.mode]} · ${tFmt().name} · 개인 ${BO_NAME[tcomp.bestOf]} · ${T}팀 · 대전 ${done} / ${total} 완료</div>
           <div class="progress"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
         </div>
         <div class="comp-actions">
