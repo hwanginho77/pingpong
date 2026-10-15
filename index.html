@@ -358,6 +358,18 @@
   .plist .it { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
   .plist .it .d { color: var(--muted); font-size: 12.5px; }
 
+  .divsel { margin-top: 6px; padding: 7px 10px; font-size: 14px; }
+  .hc-toggle { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 700; cursor: pointer; }
+  .switch.small span { background: var(--border); }
+  .hcbox.off { opacity: .45; }
+  .hc-note { font-size: 13px; color: var(--text); margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .hc-note b { color: var(--ball-deep); }
+  .hcmini { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; }
+  .hcmini .hl { font-weight: 800; color: var(--primary); }
+  .hcmini .arrow { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--primary); font-size: 11px; }
+  .hcmini .v { font-weight: 800; color: var(--primary); min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+  .hcmini .note { color: var(--muted); flex-basis: 100%; }
+  .divtag { font-size: 11px; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
   .modal.wide { max-width: 640px; }
   .teamscore { font-size: 26px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; }
   .rub { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
@@ -476,22 +488,27 @@
         <div class="pbox">
           <div class="plabel"><span class="dot red"></span>선수A</div>
           <input type="text" id="nameA" placeholder="A" maxlength="20">
+          <select id="divA" class="divsel" aria-label="선수A 부수"></select>
         </div>
         <div class="pbox">
           <div class="plabel"><span class="dot blue"></span>선수B</div>
           <input type="text" id="nameB" placeholder="B" maxlength="20">
+          <select id="divB" class="divsel" aria-label="선수B 부수"></select>
         </div>
       </div>
 
-      <div class="label">핸디캡</div>
-      <div class="hcbox">
+      <div class="label">핸디캡
+        <label class="hc-toggle"><span class="switch small"><input type="checkbox" id="hcOn" aria-label="핸디캡 사용"><span></span></span><span id="hcOnText">사용</span></label>
+      </div>
+      <div class="hcbox" id="hcBox">
         <span class="dot red"></span>
         <button class="arrow" id="hcLeft" aria-label="선수A 핸디캡 올리기">◀</button>
         <span class="val" id="hcVal">0 : 0</span>
         <button class="arrow" id="hcRight" aria-label="선수B 핸디캡 올리기">▶</button>
         <span class="dot blue"></span>
       </div>
-      <p class="hint">한쪽 선수에게만 핸디캡을 줍니다. 그 선수는 핸디캡 점수에서 시작하고, 세트마다 같은 값이 다시 적용됩니다.</p>
+      <div class="hc-note" id="hcNote"></div>
+      <p class="hint">부수를 고르면 한 부수 차이마다 1점씩(최대 7점) 낮은 부수 선수에게 자동으로 줍니다. ◀ ▶로 원하는 만큼(최대 10점) 바꿀 수 있고, 세트마다 같은 점수에서 다시 시작합니다.</p>
 
       <div class="label">첫 서브</div>
       <div class="seg" id="firstSeg">
@@ -589,6 +606,72 @@
   const need = bo => Math.ceil(bo / 2);
   const MIN_PLAYERS = 2, MAX_PLAYERS = 36;
 
+  // ---------- 부수와 핸디캡 ----------
+  // 부수 값: S급 = 0, 1부 = 1 … 10부 = 10, 모름 = null
+  // 핸디캡 값(hc): 음수면 앞 선수(A)가, 양수면 뒤 선수(B)가 그만큼 점수를 받고 시작합니다
+  const HC_MAX_AUTO = 7, HC_MAX = 10;
+  const divLabel = d => d == null ? "" : d === 0 ? "S급" : d + "부";
+  const divOptions = sel => [`<option value="" ${sel == null ? "selected" : ""}>부수 없음</option>`]
+    .concat([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => `<option value="${d}" ${sel === d ? "selected" : ""}>${divLabel(d)}</option>`)).join("");
+  const readDiv = v => v === "" || v == null ? null : Number(v);
+  const withDiv = (name, d) => d == null ? name : `${name} (${divLabel(d)})`;
+
+  // 한 부수 차이마다 1점, 최대 7점. 복식은 두 선수 부수 합의 차이를 2로 나눈 값(반올림)
+  function autoHc(aDivs, bDivs) {
+    if ([...aDivs, ...bDivs].some(d => d == null)) return null;
+    const sum = a => a.reduce((s, d) => s + d, 0);
+    let diff = sum(bDivs) - sum(aDivs);
+    if (aDivs.length > 1) diff = Math.sign(diff) * Math.round(Math.abs(diff) / 2);
+    return Math.sign(diff) * Math.min(HC_MAX_AUTO, Math.abs(diff));
+  }
+  const hcScore = hc => `${Math.max(0, -hc)} : ${Math.max(0, hc)}`;
+  const hcText = (hc, a, b) => hc === 0 ? "핸디캡 없음" : `${hc < 0 ? a : b}에게 ${Math.abs(hc)}점`;
+
+  // 이름 뒤에 적은 부수 읽기: "홍길동 3부", "홍길동(3부)", "홍길동 S급", "홍길동 S"
+  function parseEntry(raw) {
+    const s = raw.trim();
+    let m = s.match(/^(.*?)[\s(\[\/·-]*(10|[1-9])\s*부\s*[)\]]?$/);
+    if (m && m[1].trim()) return { name: m[1].trim(), div: Number(m[2]) };
+    m = s.match(/^(.*?)(?:[\s(\[\/·-]+[sSＳ]\s*(?:급|부)?|\s*[sSＳ]\s*급)\s*[)\]]?$/);
+    if (m && m[1].trim()) return { name: m[1].trim(), div: 0 };
+    return { name: s, div: null };
+  }
+
+  // 대회 화면에서 쓰는 작은 핸디캡 조절기
+  // state = { hc, manual }, getAuto() = 부수로 계산한 값(null이면 모름), names() = [앞, 뒤]
+  function hcControlHtml(key) {
+    return `<div class="hcmini" data-hc="${key}">
+      <span class="hl">핸디캡</span>
+      <button type="button" class="arrow" data-d="-1" aria-label="앞 선수에게 1점 더">◀</button>
+      <span class="v"></span>
+      <button type="button" class="arrow" data-d="1" aria-label="뒤 선수에게 1점 더">▶</button>
+      <button type="button" class="btn small" data-auto>부수대로</button>
+      <button type="button" class="btn small" data-zero>없음</button>
+      <span class="note"></span>
+    </div>`;
+  }
+  function bindHc(el, state, getAuto, names) {
+    const paint = () => {
+      const auto = getAuto();
+      if (!state.manual) state.hc = auto ?? 0;
+      const [a, b] = names();
+      el.querySelector(".v").textContent = hcScore(state.hc);
+      el.querySelector(".note").textContent = state.manual
+        ? `직접 설정 · ${hcText(state.hc, a, b)}`
+        : auto == null ? "부수를 모르면 0점 (◀ ▶로 직접 설정)" : `부수 자동 · ${hcText(state.hc, a, b)}`;
+      el.querySelector("[data-auto]").hidden = !state.manual;
+    };
+    el.querySelectorAll("[data-d]").forEach(btn => btn.onclick = () => {
+      state.manual = true;
+      state.hc = Math.max(-HC_MAX, Math.min(HC_MAX, state.hc + Number(btn.dataset.d)));
+      paint();
+    });
+    el.querySelector("[data-auto]").onclick = () => { state.manual = false; paint(); };
+    el.querySelector("[data-zero]").onclick = () => { state.manual = true; state.hc = 0; paint(); };
+    paint();
+    return paint;
+  }
+
   let toastTimer;
   function toast(msg) {
     const t = $("#toast");
@@ -667,21 +750,51 @@
   // =========================================================
   // 점수판 설정
   // =========================================================
-  const setup = store.get("setup", { hc: 0, bestOf: 3, first: 0 });
+  const setup = { hc: 0, bestOf: 3, first: 0, useHc: true, manual: false, divA: null, divB: null, ...store.get("setup", {}) };
+  const saveSetup = () => store.set("setup", setup);
+  $("#divA").innerHTML = divOptions(setup.divA);
+  $("#divB").innerHTML = divOptions(setup.divB);
+  $("#hcOn").checked = setup.useHc;
+  const setupNames = () => [$("#nameA").value.trim() || "선수A", $("#nameB").value.trim() || "선수B"];
+
+  // 부수가 바뀌면 (직접 바꾸지 않은 한) 핸디캡을 다시 계산합니다
   function paintHc() {
-    $("#hcVal").textContent = `${Math.max(0, -setup.hc)} : ${Math.max(0, setup.hc)}`;
+    const auto = autoHc([setup.divA], [setup.divB]);
+    if (!setup.manual) setup.hc = auto ?? 0;
+    const [a, b] = setupNames();
+    $("#hcBox").classList.toggle("off", !setup.useHc);
+    $("#hcLeft").disabled = $("#hcRight").disabled = !setup.useHc;
+    $("#hcOnText").textContent = setup.useHc ? "사용" : "사용 안 함";
+    $("#hcVal").textContent = setup.useHc ? hcScore(setup.hc) : "0 : 0";
+    let note;
+    if (!setup.useHc) note = "핸디캡 없이 0 : 0에서 시작합니다.";
+    else if (setup.manual) note = `<b>직접 설정</b> · ${esc(hcText(setup.hc, a, b))}` +
+      (auto != null && auto !== setup.hc ? ` (부수대로라면 ${esc(hcText(auto, a, b))})` : "") +
+      ` <button type="button" class="btn small" id="hcBack">부수대로</button>`;
+    else if (auto != null) note = `<b>부수 자동</b> · ${divLabel(setup.divA)} vs ${divLabel(setup.divB)} → ${esc(hcText(setup.hc, a, b))}`;
+    else note = "두 선수의 부수를 고르면 핸디캡이 자동으로 잡힙니다.";
+    $("#hcNote").innerHTML = note;
+    saveSetup();
   }
-  $("#hcLeft").addEventListener("click", () => { setup.hc = Math.max(-10, setup.hc - 1); paintHc(); store.set("setup", setup); });
-  $("#hcRight").addEventListener("click", () => { setup.hc = Math.min(10, setup.hc + 1); paintHc(); store.set("setup", setup); });
-  makeSeg($("#firstSeg"), setup.first, v => { setup.first = Number(v); store.set("setup", setup); });
-  makeSeg($("#boSeg"), setup.bestOf, v => { setup.bestOf = Number(v); store.set("setup", setup); });
+  const bump = d => { setup.manual = true; setup.hc = Math.max(-HC_MAX, Math.min(HC_MAX, setup.hc + d)); paintHc(); };
+  $("#hcLeft").addEventListener("click", () => bump(-1));
+  $("#hcRight").addEventListener("click", () => bump(1));
+  $("#hcNote").addEventListener("click", e => { if (e.target.id === "hcBack") { setup.manual = false; paintHc(); } });
+  $("#hcOn").addEventListener("change", e => { setup.useHc = e.target.checked; paintHc(); });
+  $("#divA").addEventListener("change", e => { setup.divA = readDiv(e.target.value); paintHc(); });
+  $("#divB").addEventListener("change", e => { setup.divB = readDiv(e.target.value); paintHc(); });
+  $("#nameA").addEventListener("input", paintHc);
+  $("#nameB").addEventListener("input", paintHc);
+  makeSeg($("#firstSeg"), setup.first, v => { setup.first = Number(v); saveSetup(); });
+  makeSeg($("#boSeg"), setup.bestOf, v => { setup.bestOf = Number(v); saveSetup(); });
   paintHc();
 
   $("#startBtn").addEventListener("click", async () => {
     if (sb && !sb.done && !(await ask("진행 중인 경기가 있습니다. 새 경기를 시작할까요?", { ok: "새 경기 시작" }))) return;
+    const [a, b] = setupNames();
     startScoreboard({
-      names: [$("#nameA").value.trim() || "A", $("#nameB").value.trim() || "B"],
-      hc: setup.hc, bestOf: setup.bestOf, first: setup.first, link: null,
+      names: [withDiv(a, setup.divA), withDiv(b, setup.divB)],
+      hc: setup.useHc ? setup.hc : 0, bestOf: setup.bestOf, first: setup.first, link: null,
     });
   });
 
@@ -925,9 +1038,9 @@
   }
 
   function createComp(f) {
-    const players = f.names.map((name, i) => ({ id: "p" + (i + 1), name }));
+    const players = f.entries.map((e, i) => ({ id: "p" + (i + 1), name: e.name, div: e.div }));
     const c = {
-      name: f.name, type: f.type, bestOf: f.bestOf, primary: f.primary,
+      name: f.name, type: f.type, bestOf: f.bestOf, primary: f.primary, useHc: f.useHc !== false,
       players, results: {}, created: Date.now(),
     };
     if (f.type === "league") {
@@ -1175,6 +1288,7 @@
           <div class="progress"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
         </div>
         <div class="comp-actions">
+          <button class="btn small" id="hcToggleBtn" title="부수 핸디캡 자동 적용">부수 핸디캡 ${comp.useHc !== false ? "켜짐" : "꺼짐"}</button>
           <button class="btn small" id="exportBtn">백업 저장</button>
           <button class="btn small" id="importBtn">백업 불러오기</button>
           <button class="btn small danger" id="newCompBtn">새 대회</button>
@@ -1190,8 +1304,13 @@
       b.classList.toggle("on", b.dataset.st === compTab);
       b.onclick = () => { compTab = b.dataset.st; store.set("compTab", compTab); renderComp(); };
     });
-    $("#exportBtn").onclick = openExport;
+    $("#exportBtn").onclick = () => openExport("comp");
     $("#importBtn").onclick = openImport;
+    $("#hcToggleBtn").onclick = () => {
+      comp.useHc = comp.useHc === false;
+      saveComp(); renderComp();
+      toast(comp.useHc ? "부수 핸디캡을 자동으로 적용합니다" : "부수 핸디캡을 끕니다");
+    };
     $("#newCompBtn").onclick = async () => {
       if (!(await ask("지금 대회 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 대회를 만들까요?", { ok: "새 대회 만들기", danger: true }))) return;
       comp = null; store.del("comp"); renderComp();
@@ -1219,7 +1338,7 @@
         <tbody>${rows.map(r => `
           <tr>
             <td class="rank ${r.rank === 1 || r.rankNo === 1 ? "r1" : ""}">${r.label}</td>
-            <td class="name"><button data-pid="${r.p.id}">${esc(r.p.name)}</button>${r.note ? `<span class="tag">${r.note}</span>` : ""}${r.stageName ? `<span class="tag">${r.stageName}</span>` : ""}</td>
+            <td class="name"><button data-pid="${r.p.id}">${esc(r.p.name)}</button>${r.p.div != null ? `<span class="divtag">${divLabel(r.p.div)}</span>` : ""}${r.note && r.st.played ? `<span class="tag">${r.note}</span>` : ""}${r.stageName ? `<span class="tag">${r.stageName}</span>` : ""}</td>
             <td>${r.st.played}</td>
             <td class="w">${r.st.w}</td>
             <td class="l">${r.st.l}</td>
@@ -1357,6 +1476,13 @@
           <button data-v="7">7전4선승</button>
         </div>
 
+        <div class="label">부수 핸디캡</div>
+        <div class="seg" id="cHc">
+          <button data-v="on">자동 적용</button>
+          <button data-v="off">사용 안 함</button>
+        </div>
+        <p class="hint">자동 적용이면 점수판으로 경기할 때 한 부수 차이마다 1점(최대 7점)을 낮은 부수 선수에게 줍니다. 경기마다 원하는 만큼 바꿀 수 있습니다.</p>
+
         <div id="cPrimaryBox">
           <div class="label">순위 1순위 기준</div>
           <div class="seg" id="cPrimary">
@@ -1376,8 +1502,9 @@
         </div>
 
         <div class="label">선수 명단 (한 줄에 한 명)</div>
-        <textarea id="cNames" rows="10" placeholder="홍길동&#10;김철수&#10;이영희&#10;...">${esc(f.names)}</textarea>
+        <textarea id="cNames" rows="10" placeholder="홍길동 3부&#10;김철수 S급&#10;이영희 7부&#10;...">${esc(f.names)}</textarea>
         <div class="count" id="cCount"><span></span><button class="btn small" id="cSample" type="button">예시 이름 넣기</button></div>
+        <p class="hint">이름 뒤에 부수를 적어 주세요. 예: <b>홍길동 3부</b>, <b>김철수 S급</b>, <b>이영희(7부)</b>. 부수를 안 적으면 핸디캡은 0점으로 시작합니다.</p>
 
         <div class="error" id="cErr"></div>
         <button class="btn primary big" id="cCreate">대회 만들기</button>
@@ -1391,29 +1518,32 @@
         ? "모든 선수가 서로 한 번씩 경기합니다. (예: 12명이면 66경기)"
         : "지면 탈락하고 이긴 선수만 다음 라운드로 올라갑니다.";
       const names = parseNames($("#cNames").value);
+      const withD = names.filter(e => e.div != null).length;
       const cnt = $("#cCount");
-      cnt.querySelector("span").textContent = `${names.length}명 (${MIN_PLAYERS}~${MAX_PLAYERS}명)`;
+      cnt.querySelector("span").textContent = `${names.length}명 (${MIN_PLAYERS}~${MAX_PLAYERS}명)${names.length ? ` · 부수 ${withD}명` : ""}`;
       cnt.classList.toggle("bad", names.length > 0 && (names.length < MIN_PLAYERS || names.length > MAX_PLAYERS));
     };
     makeSeg($("#cType"), f.type, v => { f.type = v; saveDraft(); paint(); });
     makeSeg($("#cBo"), f.bestOf, v => { f.bestOf = Number(v); saveDraft(); });
     makeSeg($("#cPrimary"), f.primary, v => { f.primary = v; saveDraft(); });
+    makeSeg($("#cHc"), f.useHc === false ? "off" : "on", v => { f.useHc = v === "on"; saveDraft(); });
     makeSeg($("#cSeed"), f.seeding, v => { f.seeding = v; saveDraft(); });
     $("#cName").oninput = e => { f.name = e.target.value; saveDraft(); };
     $("#cNames").oninput = e => { f.names = e.target.value; saveDraft(); paint(); };
     $("#cSample").onclick = () => {
-      const sample = ["김민준", "이서연", "박지호", "최수아", "정우진", "강하은", "조현우", "윤지민", "장도윤", "임서준", "한예린", "오승현"];
+      const sample = ["김민준 S급", "이서연 1부", "박지호 2부", "최수아 3부", "정우진 3부", "강하은 4부", "조현우 5부", "윤지민 5부", "장도윤 6부", "임서준 7부", "한예린 8부", "오승현 9부"];
       $("#cNames").value = f.names = sample.join("\n");
       saveDraft(); paint();
     };
     $("#cImport").onclick = openImport;
     $("#cCreate").onclick = () => {
-      const names = parseNames($("#cNames").value);
+      const entries = parseNames($("#cNames").value);
       const err = $("#cErr");
-      if (names.length < MIN_PLAYERS || names.length > MAX_PLAYERS) { err.textContent = `선수는 ${MIN_PLAYERS}명에서 ${MAX_PLAYERS}명까지 입력해 주세요. (지금 ${names.length}명)`; return; }
+      if (entries.length < MIN_PLAYERS || entries.length > MAX_PLAYERS) { err.textContent = `선수는 ${MIN_PLAYERS}명에서 ${MAX_PLAYERS}명까지 입력해 주세요. (지금 ${entries.length}명)`; return; }
+      const names = entries.map(e => e.name);
       const dup = names.find((n, i) => names.indexOf(n) !== i);
       if (dup) { err.textContent = `같은 이름이 두 번 있습니다: ${dup}`; return; }
-      comp = createComp({ ...f, name: f.name.trim() || "탁구 대회", names });
+      comp = createComp({ ...f, name: f.name.trim() || "탁구 대회", entries });
       compTab = "matches"; store.set("compTab", compTab);
       filterPlayer = ""; filterStatus = "all";
       saveComp();
@@ -1423,9 +1553,11 @@
     paint();
   }
 
+  // 한 줄에 한 명: { name, div }
   function parseNames(text) {
-    return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(parseEntry);
   }
+  const pdiv = id => comp.players.find(p => p.id === id)?.div ?? null;
 
   // ---------- 경기 결과 입력 ----------
   function openMatch(id) {
@@ -1437,7 +1569,9 @@
     const roundLabel = comp.type === "league" ? `${m.round}라운드` : roundName(m.round, R);
     openModal(`
       <h3>경기 결과 · ${roundLabel}</h3>
-      <div class="vs"><span class="a"><span class="dot red"></span> ${esc(pname(m.p1))}</span><span>vs</span><span>${esc(pname(m.p2))} <span class="dot blue"></span></span></div>
+      <div class="vs"><span class="a"><span class="dot red"></span> ${esc(withDiv(pname(m.p1), pdiv(m.p1)))}</span><span>vs</span><span>${esc(withDiv(pname(m.p2), pdiv(m.p2)))} <span class="dot blue"></span></span></div>
+      ${hcControlHtml("m")}
+      <p class="hint" style="margin:2px 0 12px">핸디캡은 '점수판으로 경기하기'를 누를 때 시작 점수로 쓰입니다. 세트 점수를 직접 입력할 때는 핸디캡이 들어간 최종 점수를 적어 주세요.</p>
       ${Array.from({ length: bo }, (_, i) => `
         <div class="setrow"><span class="no">${i + 1}세트</span>
           <input type="number" inputmode="numeric" min="0" max="99" data-s="${i}" data-k="0" value="${sets[i]?.[0] ?? ""}">
@@ -1494,6 +1628,10 @@
     };
     document.querySelectorAll("#modal input").forEach(inp => inp.addEventListener("input", refresh));
     refresh();
+    const hcState = { hc: 0, manual: false };
+    bindHc($('#modal [data-hc="m"]'), hcState,
+      () => comp.useHc === false ? 0 : autoHc([pdiv(m.p1)], [pdiv(m.p2)]),
+      () => [pname(m.p1), pname(m.p2)]);
 
     $("#mCancel").onclick = closeModal;
     $("#mSave").onclick = async () => {
@@ -1509,7 +1647,7 @@
       if (sb && !sb.done && !(await ask("점수판에 진행 중인 다른 경기가 있습니다. 새로 시작할까요?", { ok: "새로 시작" }))) return;
       closeModal();
       startScoreboard({
-        names: [pname(m.p1), pname(m.p2)], hc: 0, bestOf: comp.bestOf, first: 0,
+        names: [withDiv(pname(m.p1), pdiv(m.p1)), withDiv(pname(m.p2), pdiv(m.p2))], hc: hcState.hc, bestOf: comp.bestOf, first: 0,
         link: { matchId: m.id, p1: m.p1, p2: m.p2 },
       });
     };
@@ -1533,7 +1671,11 @@
     openModal(`
       <h3>선수 기록</h3>
       <div class="label">이름</div>
-      <div style="display:flex;gap:8px"><input type="text" id="pName" value="${esc(pname(pid))}" maxlength="20"><button class="btn" id="pRename">이름 변경</button></div>
+      <div style="display:grid;grid-template-columns:1fr 110px auto;gap:8px">
+        <input type="text" id="pName" value="${esc(pname(pid))}" maxlength="20" aria-label="이름">
+        <select id="pDiv" aria-label="부수">${divOptions(pdiv(pid))}</select>
+        <button class="btn" id="pRename">저장</button>
+      </div>
       <p style="margin:14px 0 0"><span class="w">${S.w}승</span> <span class="l">${S.l}패</span> · 세트 ${S.sw}:${S.sl} (득실률 ${ratioText(S)}) · 점수 ${S.pw}:${S.pl}</p>
       <div class="plist">${items || `<p class="hint">경기가 없습니다.</p>`}</div>
       <div class="btns"><button class="btn primary" id="pClose">닫기</button></div>`);
@@ -1542,8 +1684,10 @@
       const v = $("#pName").value.trim();
       if (!v) return;
       if (comp.players.some(p => p.id !== pid && p.name === v)) { notify("같은 이름의 선수가 이미 있습니다."); return; }
-      comp.players.find(p => p.id === pid).name = v;
-      saveComp(); closeModal(); renderComp(); toast("이름을 바꿨습니다");
+      const p = comp.players.find(x => x.id === pid);
+      p.name = v;
+      p.div = readDiv($("#pDiv").value);
+      saveComp(); closeModal(); renderComp(); toast("저장했습니다");
     };
   }
 
@@ -1652,6 +1796,11 @@
     return "?";
   };
   const sideName = ids => ids.map(plName).join("·");
+  const plDiv = pid => {
+    for (const t of tcomp.teams) { const p = t.players.find(x => x.id === pid); if (p) return p.div ?? null; }
+    return null;
+  };
+  const sideNameDiv = ids => ids.map(pid => withDiv(plName(pid), plDiv(pid))).join("·");
 
   function rubberLabels(fmt) {
     let s = 0;
@@ -1909,10 +2058,10 @@
       const at = line.search(/[:：]/);
       if (at < 0) return { err: `${i + 1}번째 줄에 ':'가 없습니다. '팀이름: 선수1, 선수2, 선수3' 모양으로 적어 주세요.` };
       const name = line.slice(0, at).trim();
-      const players = line.slice(at + 1).split(/[,，、/]/).map(s => s.trim()).filter(Boolean);
+      const players = line.slice(at + 1).split(/[,，、]/).map(s => s.trim()).filter(Boolean).map(parseEntry);
       if (!name) return { err: `${i + 1}번째 줄에 팀 이름이 없습니다.` };
       if (players.length < 3 || players.length > 6) return { err: `${name} 팀의 선수는 3~6명이어야 합니다. (지금 ${players.length}명)` };
-      if (new Set(players).size !== players.length) return { err: `${name} 팀에 같은 이름의 선수가 있습니다.` };
+      if (new Set(players.map(p => p.name)).size !== players.length) return { err: `${name} 팀에 같은 이름의 선수가 있습니다.` };
       teams.push({ name, players });
     }
     const dup = teams.find((t, i) => teams.findIndex(o => o.name === t.name) !== i);
@@ -1923,9 +2072,9 @@
   function createTeamComp(f, list) {
     const teams = list.map((t, i) => ({
       id: "t" + (i + 1), name: t.name,
-      players: t.players.map((n, j) => ({ id: `t${i + 1}p${j + 1}`, name: n })),
+      players: t.players.map((p, j) => ({ id: `t${i + 1}p${j + 1}`, name: p.name, div: p.div })),
     }));
-    const c = { name: f.name, mode: f.mode, format: f.format, bestOf: f.bestOf, teams, results: {}, created: Date.now() };
+    const c = { name: f.name, mode: f.mode, format: f.format, bestOf: f.bestOf, useHc: f.useHc !== false, teams, results: {}, created: Date.now() };
     const order = (f.seeding === "random" ? shuffle(teams) : teams).map(t => t.id);
     if (f.mode === "league") c.matches = makeLeague(teams.map(t => t.id));
     else if (f.mode === "knockout") {
@@ -1990,6 +2139,13 @@
           <button data-v="7">7전4선승</button>
         </div>
 
+        <div class="label">부수 핸디캡</div>
+        <div class="seg" id="tfHc">
+          <button data-v="on">자동 적용</button>
+          <button data-v="off">사용 안 함</button>
+        </div>
+        <p class="hint">단식은 한 부수 차이마다 1점(최대 7점), 복식은 두 선수 부수 합의 차이를 2로 나눈 점수(반올림, 최대 7점)를 줍니다. 경기마다 원하는 만큼 바꿀 수 있습니다.</p>
+
         <div id="tfSeedBox">
           <div class="label">팀 배정</div>
           <div class="seg" id="tfSeed">
@@ -2000,9 +2156,9 @@
         </div>
 
         <div class="label">팀 명단 (한 줄에 한 팀)</div>
-        <textarea id="tfText" rows="12" placeholder="번개: 김민준, 이서연, 박지호&#10;스매시: 최수아, 정우진, 강하은&#10;...">${esc(f.text)}</textarea>
+        <textarea id="tfText" rows="12" placeholder="번개: 김민준 2부, 이서연 4부, 박지호 6부&#10;스매시: 최수아 S급, 정우진 5부, 강하은 7부&#10;...">${esc(f.text)}</textarea>
         <div class="count" id="tfCount"><span></span><button class="btn small" id="tfSample" type="button">예시 12팀 넣기</button></div>
-        <p class="hint">'팀이름: 선수1, 선수2, 선수3' 모양으로 적어 주세요. 선수는 3~6명(후보 포함)이고, 적은 순서대로 A·B·C 오더가 됩니다.</p>
+        <p class="hint">'팀이름: 선수1 3부, 선수2 5부, 선수3 S급' 모양으로 적어 주세요. 선수는 3~6명(후보 포함)이고, 적은 순서대로 A·B·C 오더가 됩니다. 부수를 안 적으면 그 선수의 핸디캡은 0점입니다.</p>
 
         <div class="error" id="tfErr"></div>
         <button class="btn primary big" id="tfCreate">팀전 만들기</button>
@@ -2044,6 +2200,7 @@
     makeSeg($("#tfFormat"), f.format, v => { f.format = v; save(); paint(); });
     makeSeg($("#tfBo"), f.bestOf, v => { f.bestOf = Number(v); save(); });
     makeSeg($("#tfSeed"), f.seeding, v => { f.seeding = v; save(); });
+    makeSeg($("#tfHc"), f.useHc === false ? "off" : "on", v => { f.useHc = v === "on"; save(); });
     $("#tfGroups").onchange = e => { f.groups = Number(e.target.value); save(); paint(); };
     $("#tfAdvance").onchange = e => { f.advance = Number(e.target.value); save(); paint(); };
     $("#tfName").oninput = e => { f.name = e.target.value; save(); };
@@ -2052,8 +2209,9 @@
       const tn = ["번개", "스매시", "드라이브", "커트", "루프", "백핸드", "포핸드", "서브왕", "랠리", "에이스", "펜홀더", "셰이크"];
       const sur = "김이박최정강조윤장임한오서신권황안송";
       const giv = ["민준", "서연", "지호", "수아", "우진", "하은", "현우", "지민", "도윤", "서준", "예린", "승현"];
+      const divs = ["S급", "1부", "2부", "3부", "4부", "5부", "6부", "7부", "8부", "9부"];
       $("#tfText").value = f.text = tn.map((n, i) =>
-        `${n}: ${[0, 1, 2].map(k => sur[(i * 3 + k) % sur.length] + giv[(i * 5 + k * 7) % giv.length]).join(", ")}`).join("\n");
+        `${n}: ${[0, 1, 2].map(k => sur[(i * 3 + k) % sur.length] + giv[(i * 5 + k * 7) % giv.length] + " " + divs[(i + k * 3) % divs.length]).join(", ")}`).join("\n");
       save(); paint();
     };
     $("#tfImport").onclick = openImport;
@@ -2094,6 +2252,7 @@
           <div class="progress"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
         </div>
         <div class="comp-actions">
+          <button class="btn small" id="tHcToggle" title="부수 핸디캡 자동 적용">부수 핸디캡 ${tcomp.useHc !== false ? "켜짐" : "꺼짐"}</button>
           <button class="btn small" id="tExport">백업 저장</button>
           <button class="btn small" id="tImport">백업 불러오기</button>
           <button class="btn small danger" id="tNew">새 팀전</button>
@@ -2111,6 +2270,11 @@
       b.onclick = () => { tTab = b.dataset.st; store.set("tTab", tTab); renderTeam(); };
     });
     $("#tExport").onclick = () => openExport("tcomp");
+    $("#tHcToggle").onclick = () => {
+      tcomp.useHc = tcomp.useHc === false;
+      saveT(); renderTeam();
+      toast(tcomp.useHc ? "부수 핸디캡을 자동으로 적용합니다" : "부수 핸디캡을 끕니다");
+    };
     $("#tImport").onclick = openImport;
     $("#tNew").onclick = async () => {
       if (!(await ask("지금 팀전 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 팀전을 만들까요?", { ok: "새 팀전 만들기", danger: true }))) return;
@@ -2274,7 +2438,7 @@
         <th>단식</th><th>복식</th><th>합계</th><th>세트 득-실</th><th>세트득실률</th><th>득점</th><th>실점</th></tr></thead>
       <tbody>${rows.map((p, k) => `<tr>
         <td class="rank ${k === 0 && p.sw + p.dw ? "r1" : ""}">${k + 1}</td>
-        <td class="name">${esc(plName(p.id))}</td>
+        <td class="name">${esc(plName(p.id))}${plDiv(p.id) != null ? `<span class="divtag">${divLabel(plDiv(p.id))}</span>` : ""}</td>
         <td class="name">${teamBtn(p.team)}</td>
         <td>${p.sw}승 ${p.sl}패</td><td>${p.dw}승 ${p.dl}패</td>
         <td><span class="w">${p.sw + p.dw}승</span> <span class="l">${p.sl + p.dl}패</span></td>
@@ -2290,7 +2454,7 @@
     const fmt = tFmt(), labels = rubberLabels(fmt), bo = tcomp.bestOf, nSet = need(bo);
     const A = team(m.p1), B = team(m.p2);
     const saved = m.result?.rubbers || [];
-    const opts = (t, sel) => t.players.map(p => `<option value="${p.id}" ${p.id === sel ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+    const opts = (t, sel) => t.players.map(p => `<option value="${p.id}" ${p.id === sel ? "selected" : ""}>${esc(withDiv(p.name, p.div))}</option>`).join("");
     const rubHtml = fmt.rubbers.map(([, hi, ai], i) => {
       const r = saved[i];
       const h = r?.h ?? hi.map(k => (A.players[k] ?? A.players[0]).id);
@@ -2300,6 +2464,7 @@
       return `<div class="rub" id="rub${i}">
         <div class="rub-head"><b>${labels[i]}</b><span class="rub-st" id="rst${i}"></span><button class="btn small" data-live="${i}">점수판</button></div>
         <div class="rub-line"><div class="side">${sel(A, h, "h")}</div><span class="vsx">vs</span><div class="side">${sel(B, a, "a")}</div></div>
+        ${hcControlHtml("r" + i)}
         <div class="rub-sets">${Array.from({ length: bo }, (_, s) => `<span class="st">
           <input type="number" inputmode="numeric" min="0" max="99" data-r="${i}" data-s="${s}" data-k="0" value="${r?.sets[s]?.[0] ?? ""}" aria-label="${labels[i]} ${s + 1}세트 ${esc(A.name)}">
           <span>:</span>
@@ -2310,7 +2475,7 @@
     openModal(`
       <h3>팀 경기 · ${matchLabel(m)}</h3>
       <div class="vs"><span class="a"><span class="dot red"></span> ${esc(A.name)}</span><span id="tScore" class="teamscore">0 : 0</span><span>${esc(B.name)} <span class="dot blue"></span></span></div>
-      <p class="hint" style="margin:0 0 10px">출전 선수(오더)를 고르고 세트 점수를 입력하세요. 아직 하지 않은 경기는 비워 두면 '진행 중'으로 저장됩니다.</p>
+      <p class="hint" style="margin:0 0 10px">출전 선수(오더)를 고르고 세트 점수를 입력하세요. 아직 하지 않은 경기는 비워 두면 '진행 중'으로 저장됩니다. 핸디캡은 '점수판'으로 경기할 때 시작 점수로 쓰입니다.</p>
       ${rubHtml}
       <div class="error" id="tErr"></div>
       <div class="btns">
@@ -2371,6 +2536,17 @@
     document.querySelectorAll("#modal input, #modal select").forEach(el => el.addEventListener(el.tagName === "SELECT" ? "change" : "input", refresh));
     check();
 
+    // 개인 경기마다 핸디캡 (출전 선수를 바꾸면 부수대로 다시 계산)
+    const hcStates = fmt.rubbers.map(() => ({ hc: 0, manual: false }));
+    const hcPaint = fmt.rubbers.map((_, i) => bindHc($(`#modal [data-hc="r${i}"]`), hcStates[i],
+      () => {
+        if (tcomp.useHc === false) return 0;
+        const { h, a } = readRubber(i);
+        return autoHc(h.map(plDiv), a.map(plDiv));
+      },
+      () => { const { h, a } = readRubber(i); return [sideName(h), sideName(a)]; }));
+    document.querySelectorAll("#modal select[data-r]").forEach(s => s.addEventListener("change", () => hcPaint[Number(s.dataset.r)]()));
+
     $("#tCancel").onclick = closeModal;
     $("#tSave").onclick = async () => {
       const r = refresh();
@@ -2396,7 +2572,7 @@
       else if (m.result) { delete tcomp.results[m.id]; saveT(); }
       closeModal();
       startScoreboard({
-        names: [sideName(h), sideName(a)], hc: 0, bestOf: tcomp.bestOf, first: 0,
+        names: [sideNameDiv(h), sideNameDiv(a)], hc: hcStates[i].hc, bestOf: tcomp.bestOf, first: 0,
         link: { kind: "team", matchId: m.id, rubber: i, p1: m.p1, p2: m.p2, h, a },
       });
     });
@@ -2439,20 +2615,23 @@
       <div class="label">팀 이름</div>
       <input type="text" id="tiName" value="${esc(t.name)}" maxlength="20">
       <div class="label">선수 (위에서부터 A·B·C 기본 오더)</div>
-      <div class="roster">${t.players.map(p => `<input type="text" data-pid="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="선수 이름">`).join("")}</div>
+      <div class="roster">${t.players.map(p => `<div style="display:grid;grid-template-columns:1fr 110px;gap:6px">
+        <input type="text" data-pid="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="선수 이름">
+        <select data-pdiv="${p.id}" aria-label="${esc(p.name)} 부수">${divOptions(p.div ?? null)}</select></div>`).join("")}</div>
       <div class="error" id="tiErr"></div>
       <div class="plist">${items || `<p class="hint">대전이 없습니다.</p>`}</div>
-      <div class="btns"><button class="btn" id="tiClose">닫기</button><button class="btn primary" id="tiSave">이름 저장</button></div>`);
+      <div class="btns"><button class="btn" id="tiClose">닫기</button><button class="btn primary" id="tiSave">저장</button></div>`);
     $("#tiClose").onclick = closeModal;
     $("#tiSave").onclick = () => {
       const name = $("#tiName").value.trim();
       const names = [...document.querySelectorAll("#modal [data-pid]")].map(i => i.value.trim());
+      const divs = [...document.querySelectorAll("#modal [data-pdiv]")].map(s => readDiv(s.value));
       if (!name || names.some(n => !n)) { $("#tiErr").textContent = "빈 이름이 있습니다."; return; }
       if (tcomp.teams.some(o => o.id !== tid && o.name === name)) { $("#tiErr").textContent = "같은 이름의 팀이 이미 있습니다."; return; }
       if (new Set(names).size !== names.length) { $("#tiErr").textContent = "같은 팀에 같은 이름의 선수가 있습니다."; return; }
       t.name = name;
-      t.players.forEach((p, k) => p.name = names[k]);
-      saveT(); closeModal(); renderTeam(); toast("이름을 저장했습니다");
+      t.players.forEach((p, k) => { p.name = names[k]; p.div = divs[k]; });
+      saveT(); closeModal(); renderTeam(); toast("저장했습니다");
     };
   }
 
