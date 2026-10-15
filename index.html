@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>탁구 랠리</title>
+<title>핑퐁 시합 매니저</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0b2a66">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="탁구 랠리">
+<meta name="apple-mobile-web-app-title" content="핑퐁 매니저">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
@@ -85,7 +85,8 @@
   .head-row { display: flex; align-items: center; justify-content: space-between; height: 64px; }
   .logo { display: flex; align-items: center; gap: 10px; }
   .logo-mark { width: 38px; height: 38px; flex: none; }
-  .logo-text { font-family: var(--display); font-size: 25px; letter-spacing: .5px; line-height: 1; }
+  .logo-text { font-family: var(--display); font-size: 25px; letter-spacing: .5px; line-height: 1; white-space: nowrap; }
+  @media (max-width: 400px) { .logo-text { font-size: 21px; } .logo-mark { width: 32px; height: 32px; } }
   .logo-text .ball { color: var(--ball); }
   .logo-sub { display: block; font-family: var(--body); font-size: 11px; letter-spacing: 1.5px; color: rgba(255,255,255,.7); margin-top: 3px; }
   .theme { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.8); font-size: 14px; }
@@ -448,7 +449,7 @@
           <ellipse cx="20" cy="17" rx="12.5" ry="13" fill="#e0302b" stroke="#fff" stroke-width="1.6"/>
           <circle cx="32.5" cy="7.5" r="5.5" fill="#ff7a1a" stroke="#fff" stroke-width="1.4"/>
         </svg>
-        <div class="logo-text">탁구 <span class="ball">랠리</span><span class="logo-sub">점수판 · 개인전 · 팀전</span></div>
+        <div class="logo-text">핑퐁 시합 <span class="ball">매니저</span><span class="logo-sub">점수판 · 개인전 · 팀전</span></div>
       </div>
       <label class="theme">다크
         <span class="switch"><input type="checkbox" id="themeToggle" aria-label="다크 모드"><span></span></span>

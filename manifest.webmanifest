@@ -1,7 +1,7 @@
 {
-  "name": "탁구 랠리",
-  "short_name": "탁구 랠리",
-  "description": "터치 탁구 점수판과 리그전·토너먼트 기록, 순위 계산",
+  "name": "핑퐁 시합 매니저",
+  "short_name": "핑퐁 매니저",
+  "description": "탁구 점수판과 개인전·팀전 대회 기록, 순위 계산",
   "lang": "ko",
   "start_url": "./",
   "scope": "./",
