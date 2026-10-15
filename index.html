@@ -1789,16 +1789,29 @@
   // 팀전
   // =========================================================
   // 오더 기본값: 우리 팀 선수 순서 A·B·C (0·1·2), 상대 팀 X·Y·Z (0·1·2)
+  // min = 팀에 필요한 최소 인원
   const TEAM_FORMATS = {
-    ssdss: { name: "단·단·복·단·단", need: 3, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["D", [1, 2], [1, 2]], ["S", [0], [1]], ["S", [2], [2]]] },
-    s5:    { name: "5단식", need: 3, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["S", [2], [2]], ["S", [0], [1]], ["S", [1], [0]]] },
-    sds:   { name: "단·복·단", need: 2, rubbers: [["S", [0], [0]], ["D", [1, 2], [1, 2]], ["S", [1], [1]]] },
+    ssdss: { name: "단·단·복·단·단", need: 3, min: 3, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["D", [1, 2], [1, 2]], ["S", [0], [1]], ["S", [2], [2]]] },
+    s5:    { name: "5단식", need: 3, min: 3, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["S", [2], [2]], ["S", [0], [1]], ["S", [1], [0]]] },
+    ssd:   { name: "단·단·복", need: 2, min: 2, rubbers: [["S", [0], [0]], ["S", [1], [1]], ["D", [2, 0], [2, 0]]] },
+    sds:   { name: "단·복·단", need: 2, min: 2, rubbers: [["S", [0], [0]], ["D", [1, 2], [1, 2]], ["S", [1], [1]]] },
   };
   const FORMAT_HINT = {
-    ssdss: "1단식 A–X · 2단식 B–Y · 복식 B·C–Y·Z · 3단식 A–Y · 4단식 C–Z, 먼저 3승",
-    s5: "A–X · B–Y · C–Z · A–Y · B–X, 먼저 3승",
-    sds: "1단식 A–X · 복식 B·C–Y·Z · 2단식 B–Y, 먼저 2승",
+    ssdss: "1단식 A–X · 2단식 B–Y · 복식 B·C–Y·Z · 3단식 A–Y · 4단식 C–Z, 먼저 3승 (팀당 3명 이상)",
+    s5: "A–X · B–Y · C–Z · A–Y · B–X, 먼저 3승 (팀당 3명 이상)",
+    ssd: "1단식 A–X · 2단식 B–Y · 복식 C·A–Z·X (2명 팀은 A·B–X·Y), 먼저 2승",
+    sds: "1단식 A–X · 복식 B·C–Y·Z (2명 팀은 A·B–X·Y) · 2단식 B–Y, 먼저 2승",
   };
+  // 기본 오더: 정한 순번의 선수가 없으면(2명 팀 등) 아직 안 쓴 선수로 채웁니다
+  function defaultLineup(team, idxs) {
+    const n = team.players.length, used = new Set();
+    return idxs.map(k => {
+      let j = k < n ? k : 0;
+      while (used.has(j) && used.size < n) j = (j + 1) % n;
+      used.add(j);
+      return team.players[j].id;
+    });
+  }
   const MODE_NAME = { league: "팀 리그전", knockout: "팀 토너먼트", groups: "조별 리그 → 본선" };
   const GROUP_LETTERS = "ABCDEFGH";
   const MIN_TEAMS = 2, MAX_TEAMS = 36;
@@ -2079,7 +2092,7 @@
       const name = line.slice(0, at).trim();
       const players = line.slice(at + 1).split(/[,，、]/).map(s => s.trim()).filter(Boolean).map(parseEntry);
       if (!name) return { err: `${i + 1}번째 줄에 팀 이름이 없습니다.` };
-      if (players.length < 3 || players.length > 6) return { err: `${name} 팀의 선수는 3~6명이어야 합니다. (지금 ${players.length}명)` };
+      if (players.length < 2 || players.length > 6) return { err: `${name} 팀의 선수는 2~6명이어야 합니다. (지금 ${players.length}명)` };
       if (new Set(players.map(p => p.name)).size !== players.length) return { err: `${name} 팀에 같은 이름의 선수가 있습니다.` };
       teams.push({ name, players });
     }
@@ -2120,7 +2133,7 @@
     const f = store.get("tDraft", { name: "", mode: "groups", format: "ssdss", bestOf: 3, groups: 3, advance: 2, seeding: "order", text: "" });
     root.innerHTML = `
       <h1 class="page-title">팀전 <span class="ball">단체 대회</span></h1>
-      <p class="lead">3명이 한 팀이 되어 팀끼리 겨룹니다. 팀 리그전, 팀 토너먼트, 조별 리그 후 본선 토너먼트를 고를 수 있고, 팀 순위와 선수 개인 기록을 자동으로 계산합니다.</p>
+      <p class="lead">2~6명이 한 팀이 되어 팀끼리 겨룹니다. 팀 리그전, 팀 토너먼트, 조별 리그 후 본선 토너먼트를 고를 수 있고, 팀 순위와 선수 개인 기록을 자동으로 계산합니다.</p>
       <div class="card narrow">
         <div class="label">대회 이름</div>
         <input type="text" id="tfName" placeholder="예: 가을 동호회 단체전" value="${esc(f.name)}" maxlength="40">
@@ -2146,6 +2159,7 @@
         <div class="seg" id="tfFormat">
           <button data-v="ssdss">단·단·복·단·단</button>
           <button data-v="s5">5단식</button>
+          <button data-v="ssd">단·단·복</button>
           <button data-v="sds">단·복·단</button>
         </div>
         <p class="hint" id="tfFormatHint"></p>
@@ -2177,7 +2191,7 @@
         <div class="label">팀 명단 (한 줄에 한 팀)</div>
         <textarea id="tfText" rows="12" placeholder="번개: 김민준 2부, 이서연 4부, 박지호 6부&#10;스매시: 최수아 S급, 정우진 5부, 강하은 7부&#10;...">${esc(f.text)}</textarea>
         <div class="count" id="tfCount"><span></span><button class="btn small" id="tfSample" type="button">예시 12팀 넣기</button></div>
-        <p class="hint">'팀이름: 선수1 3부, 선수2 5부, 선수3 S급' 모양으로 적어 주세요. 선수는 3~6명(후보 포함)이고, 적은 순서대로 A·B·C 오더가 됩니다. 부수를 안 적으면 그 선수의 핸디캡은 0점입니다.</p>
+        <p class="hint">'팀이름: 선수1 3부, 선수2 5부, 선수3 S급' 모양으로 적어 주세요. 선수는 2~6명(후보 포함)이고, 적은 순서대로 A·B·C 오더가 됩니다. 2명 팀은 단·단·복이나 단·복·단으로 해 주세요. 부수를 안 적으면 그 선수의 핸디캡은 0점입니다.</p>
 
         <div class="error" id="tfErr"></div>
         <button class="btn primary big" id="tfCreate">팀전 만들기</button>
@@ -2241,6 +2255,9 @@
       if (r.err) { err.textContent = r.err; return; }
       const T = r.teams.length;
       if (T < MIN_TEAMS || T > MAX_TEAMS) { err.textContent = `팀은 ${MIN_TEAMS}팀에서 ${MAX_TEAMS}팀까지 만들 수 있습니다. (지금 ${T}팀)`; return; }
+      const fmt = TEAM_FORMATS[f.format];
+      const small = r.teams.find(t => t.players.length < fmt.min);
+      if (small) { err.textContent = `${fmt.name} 방식은 팀당 ${fmt.min}명 이상이 필요합니다. (${small.name} 팀은 ${small.players.length}명) 단·단·복이나 단·복·단을 고르거나 선수를 더 적어 주세요.`; return; }
       if (f.mode === "groups" && T < 4) { err.textContent = "조별 리그는 4팀 이상일 때 만들 수 있습니다."; return; }
       if (f.mode === "groups" && f.groups > Math.floor(T / 2)) { err.textContent = `${T}팀이면 조는 ${Math.floor(T / 2)}개까지 만들 수 있습니다.`; return; }
       if (f.mode === "groups" && f.advance > Math.floor(T / f.groups)) { err.textContent = "조별 본선 진출 팀 수가 한 조의 팀 수보다 많습니다."; return; }
@@ -2479,8 +2496,8 @@
     const opts = (t, sel) => t.players.map(p => `<option value="${p.id}" ${p.id === sel ? "selected" : ""}>${esc(withDiv(p.name, p.div))}</option>`).join("");
     const rubHtml = fmt.rubbers.map(([, hi, ai], i) => {
       const r = saved[i];
-      const h = r?.h ?? hi.map(k => (A.players[k] ?? A.players[0]).id);
-      const a = r?.a ?? ai.map(k => (B.players[k] ?? B.players[0]).id);
+      const h = r?.h ?? defaultLineup(A, hi);
+      const a = r?.a ?? defaultLineup(B, ai);
       const sel = (t, ids, side) => ids.map((pid, k) =>
         `<select data-r="${i}" data-side="${side}" data-k="${k}" aria-label="${labels[i]} ${esc(t.name)} 선수 ${k + 1}">${opts(t, pid)}</select>`).join("");
       return `<div class="rub" id="rub${i}">
