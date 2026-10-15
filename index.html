@@ -3,53 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>탁구 점수판</title>
+<title>탁구 랠리</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#141416">
+<meta name="theme-color" content="#0b2a66">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="탁구 점수판">
+<meta name="apple-mobile-web-app-title" content="탁구 랠리">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
 <style>
+  /* 구성: 경기용 탁구대(파란 면 + 흰 라인)를 머리글에, 주황 탁구공을 강조색으로, 선수 색은 라켓 고무의 빨강/파랑 */
   :root {
-    --bg: #ffffff;
+    --bg: #eaf0f9;          /* 체육관 바닥처럼 옅은 청회색 */
     --surface: #ffffff;
-    --surface2: #f4f4f6;
-    --border: #e4e4e9;
-    --text: #141416;
-    --muted: #6d6d78;
-    --primary: #141416;
+    --surface2: #e3ebf7;
+    --border: #cfdaeb;
+    --text: #13213d;
+    --muted: #5b6a86;
+    --primary: #1652b8;      /* 경기용 탁구대 파랑 */
+    --primary-deep: #0b2a66;
+    --primary-soft: #dbe7fb;
     --on-primary: #ffffff;
-    --red: #e53935;
+    --ball: #ff7a1a;         /* 주황 탁구공 */
+    --ball-deep: #e55a00;
+    --ball-soft: #fff0e3;
+    --line: #ffffff;         /* 탁구대 흰 라인 */
+    --red: #e0302b;          /* 빨간 러버 */
     --blue: #1e6fe8;
-    --win: #16924a;
-    --lose: #d23a2f;
-    --win-bg: #e7f6ed;
-    --lose-bg: #fdecea;
-    --gold: #c99a06;
+    --win: #138a4a;
+    --lose: #d2352a;
+    --win-bg: #e3f5ea;
+    --lose-bg: #fde9e7;
+    --gold: #c28a00;
+    --display: "Black Han Sans", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
+    --body: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
   }
   :root[data-theme="dark"] {
-    --bg: #111214;
-    --surface: #1a1b1e;
-    --surface2: #24262a;
-    --border: #34363c;
-    --text: #f1f1f4;
-    --muted: #9a9ca5;
-    --primary: #f1f1f4;
-    --on-primary: #111214;
-    --win: #4cd27f;
-    --lose: #ff6b60;
-    --win-bg: #173323;
-    --lose-bg: #3a1c1a;
-    --gold: #f2c230;
+    --bg: #08111f; --surface: #0f1c33; --surface2: #162746; --border: #253a60;
+    --text: #edf2ff; --muted: #97a6c4; --primary: #3d82f5; --primary-deep: #0a2457; --primary-soft: #16305e;
+    --on-primary: #ffffff; --ball: #ff8a33; --ball-deep: #ff6a00; --ball-soft: #3a2414;
+    --win: #4cd27f; --lose: #ff6b60; --win-bg: #12301f; --lose-bg: #3a1a18; --gold: #f2c230;
     color-scheme: dark;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #111214; --surface: #1a1b1e; --surface2: #24262a; --border: #34363c;
-      --text: #f1f1f4; --muted: #9a9ca5; --primary: #f1f1f4; --on-primary: #111214;
-      --win: #4cd27f; --lose: #ff6b60; --win-bg: #173323; --lose-bg: #3a1c1a; --gold: #f2c230;
+      --bg: #08111f; --surface: #0f1c33; --surface2: #162746; --border: #253a60;
+      --text: #edf2ff; --muted: #97a6c4; --primary: #3d82f5; --primary-deep: #0a2457; --primary-soft: #16305e;
+      --on-primary: #ffffff; --ball: #ff8a33; --ball-deep: #ff6a00; --ball-soft: #3a2414;
+      --win: #4cd27f; --lose: #ff6b60; --win-bg: #12301f; --lose-bg: #3a1a18; --gold: #f2c230;
       color-scheme: dark;
     }
   }
@@ -58,50 +62,57 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
+    font-family: var(--body);
     font-size: 15px;
     line-height: 1.5;
   }
+  :focus-visible { outline: 3px solid var(--ball); outline-offset: 2px; }
   button, input, select, textarea { font: inherit; color: inherit; }
   button { cursor: pointer; }
 
   /* ---------- 머리글 ---------- */
+  /* 머리글 = 위에서 내려다본 탁구대: 파란 면, 가운데 흰 센터라인, 아래 흰 엔드라인 */
   header {
-    border-bottom: 1px solid var(--border);
     position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
-    background: var(--bg);
+    background:
+      linear-gradient(90deg, transparent calc(50% - 1px), rgba(255,255,255,.22) calc(50% - 1px), rgba(255,255,255,.22) calc(50% + 1px), transparent calc(50% + 1px)),
+      linear-gradient(135deg, var(--primary-deep), var(--primary));
+    border-bottom: 4px solid var(--line);
+    box-shadow: 0 6px 18px rgba(11, 42, 102, .25);
+    color: #fff;
   }
   .wrap { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
-  .head-row { display: flex; align-items: center; justify-content: space-between; height: 60px; }
-  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; }
-  .logo-mark {
-    width: 34px; height: 34px; border-radius: 9px;
-    background: var(--primary); color: var(--on-primary);
-    display: grid; place-items: center; font-size: 18px;
-  }
-  .theme { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  .head-row { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-mark { width: 38px; height: 38px; flex: none; }
+  .logo-text { font-family: var(--display); font-size: 25px; letter-spacing: .5px; line-height: 1; }
+  .logo-text .ball { color: var(--ball); }
+  .logo-sub { display: block; font-family: var(--body); font-size: 11px; letter-spacing: 1.5px; color: rgba(255,255,255,.7); margin-top: 3px; }
+  .theme { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.8); font-size: 14px; }
   .switch { position: relative; width: 38px; height: 22px; }
   .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; }
   .switch span {
-    position: absolute; inset: 0; border-radius: 11px; background: var(--border); pointer-events: none;
+    position: absolute; inset: 0; border-radius: 11px; background: rgba(255,255,255,.28); pointer-events: none;
     transition: background .2s;
   }
   .switch span::after {
     content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
     background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.3);
   }
-  .switch input:checked + span { background: var(--primary); }
-  .switch input:checked + span::after { transform: translateX(16px); background: var(--on-primary); }
+  .switch input:checked + span { background: var(--ball); }
+  .switch input:checked + span::after { transform: translateX(16px); }
   nav.tabs { display: flex; gap: 4px; }
   nav.tabs button {
-    background: none; border: 0; padding: 10px 12px; color: var(--muted);
-    border-bottom: 2px solid transparent; font-weight: 600;
+    background: none; border: 0; padding: 10px 14px; color: rgba(255,255,255,.72);
+    border-bottom: 3px solid transparent; font-weight: 700; font-size: 15px;
   }
-  nav.tabs button.active { color: var(--text); border-bottom-color: var(--text); }
+  nav.tabs button:hover { color: #fff; }
+  nav.tabs button.active { color: #fff; border-bottom-color: var(--ball); }
 
   main { padding: 28px 0 60px; }
-  .page-title { font-size: 26px; font-weight: 800; margin: 0 0 6px; }
-  .lead { color: var(--muted); margin: 0 0 24px; }
+  .page-title { font-family: var(--display); font-weight: 400; font-size: 30px; margin: 0 0 6px; color: var(--primary); text-wrap: balance; letter-spacing: .5px; }
+  .page-title .ball { color: var(--ball); }
+  .lead { color: var(--muted); margin: 0 0 24px; max-width: 65ch; }
   .tab { display: none; }
   .tab.active { display: block; }
 
@@ -109,11 +120,14 @@
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
+    border-top: 5px solid var(--primary);
     border-radius: 14px;
     padding: 24px;
+    box-shadow: 0 10px 30px rgba(11, 42, 102, .08);
   }
   .narrow { max-width: 448px; margin: 0 auto; }
-  .label { font-weight: 700; font-size: 14px; margin: 22px 0 8px; }
+  .label { font-weight: 800; font-size: 14px; margin: 22px 0 8px; color: var(--primary); display: flex; align-items: center; gap: 7px; }
+  .label::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ball); flex: none; }
   .label:first-child { margin-top: 0; }
   .hint { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
   .center { text-align: center; }
@@ -124,27 +138,36 @@
     width: 100%; border: 1px solid var(--border); border-radius: 8px;
     padding: 10px 12px; background: var(--surface); outline: none;
   }
-  input:focus, textarea:focus, select:focus { border-color: var(--text); }
+  input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
   .btn {
     border: 1px solid var(--border); background: var(--surface); border-radius: 9px;
-    padding: 9px 14px; font-weight: 600; white-space: nowrap;
+    padding: 9px 14px; font-weight: 700; white-space: nowrap; color: var(--primary);
   }
-  .btn:hover { background: var(--surface2); }
+  .btn:hover { background: var(--primary-soft); }
   .btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
-  .btn.primary:hover { opacity: .9; }
+  .btn.primary:hover { background: var(--primary-deep); }
   .btn.danger { color: var(--lose); }
-  .btn.big { width: 100%; padding: 15px; font-size: 16px; margin-top: 26px; border-radius: 10px; }
+  /* 큰 실행 버튼은 주황 탁구공 색 */
+  .btn.big {
+    width: 100%; padding: 15px; font-size: 18px; margin-top: 26px; border-radius: 12px;
+    background: linear-gradient(180deg, var(--ball), var(--ball-deep)); border: 0; color: #fff;
+    font-family: var(--display); font-weight: 400; letter-spacing: 1px;
+    box-shadow: 0 6px 16px rgba(229, 90, 0, .35);
+  }
+  .btn.big:hover { background: linear-gradient(180deg, var(--ball-deep), var(--ball-deep)); }
   .btn.small { padding: 6px 10px; font-size: 13px; }
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
   .seg button {
     border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
-    padding: 9px 6px; color: var(--muted); font-size: 14px;
+    padding: 9px 6px; color: var(--muted); font-size: 14px; font-weight: 600;
   }
-  .seg button.on { border: 2px solid var(--text); color: var(--text); font-weight: 700; padding: 8px 5px; }
+  .seg button:hover { border-color: var(--primary); color: var(--primary); }
+  .seg button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 800; box-shadow: 0 3px 10px rgba(22, 82, 184, .3); }
 
   /* ---------- 점수판 설정 ---------- */
   .players { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .pbox { border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .pbox { border: 1px solid var(--border); border-radius: 10px; padding: 12px; border-top: 4px solid var(--red); }
+  .pbox + .pbox { border-top-color: var(--blue); }
   .plabel { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
   .pbox input { font-weight: 700; font-size: 16px; }
   .hcbox {
@@ -155,14 +178,16 @@
     width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--surface); font-size: 13px;
   }
-  .hcbox .val { font-size: 20px; font-weight: 800; min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+  .hcbox .arrow { color: var(--primary); }
+  .hcbox .val { font-size: 22px; font-weight: 800; color: var(--primary); min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
   .resume {
     border: 1px solid var(--border); background: var(--surface2); border-radius: 10px;
     padding: 12px 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
   .resume .txt { flex: 1; min-width: 160px; font-size: 14px; }
   .howto { margin-top: 40px; border-top: 1px solid var(--border); padding-top: 24px; }
-  .howto h2 { font-size: 19px; margin: 0 0 8px; }
+  .howto h2 { font-family: var(--display); font-weight: 400; font-size: 22px; margin: 0 0 8px; color: var(--primary); }
+  .howto li::marker { color: var(--ball); font-weight: 800; }
   .howto p, .howto li { color: var(--muted); }
   .howto li b { color: var(--text); }
 
@@ -360,6 +385,51 @@
   }
   .toast.show { opacity: 1; }
 
+  /* ---------- 탁구 색 입히기 ---------- */
+  .toast { background: var(--primary-deep); border: 2px solid var(--ball); }
+  .comp-head h1 { font-family: var(--display); font-weight: 400; font-size: 28px; color: var(--primary); letter-spacing: .5px; }
+  .progress { height: 10px; border-radius: 5px; }
+  .progress i { background: linear-gradient(90deg, var(--primary), var(--ball)); border-radius: 5px; }
+  .subtabs button:hover { color: var(--primary); border-color: var(--primary); }
+  .subtabs button.on { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 3px 10px rgba(22, 82, 184, .3); }
+  .scroll-x { background: var(--surface); }
+  table.std th { background: var(--primary); color: #fff; font-weight: 700; }
+  table.std tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface2) 55%, transparent); }
+  table.std tbody tr:hover td { background: var(--primary-soft); }
+  table.std td.name button { color: var(--primary); text-decoration-color: var(--primary); }
+  .rank { color: var(--primary); }
+  .rank.r1 { color: var(--gold); }
+  .tag { background: var(--ball-soft); color: var(--ball-deep); }
+  :root[data-theme="dark"] .tag { color: var(--ball); }
+  tr.adv td, table.std tbody tr.adv:nth-child(even) td { background: var(--win-bg); }
+  .round-title, .group-title, .bcol h4 { color: var(--primary); display: flex; align-items: center; gap: 7px; }
+  .bcol h4 { justify-content: center; }
+  .round-title::before, .group-title::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ball); flex: none; }
+  .group-title { font-family: var(--display); font-weight: 400; font-size: 21px; }
+  .mrow { border-left: 4px solid var(--primary); }
+  .mrow:hover { background: var(--primary-soft); }
+  .mrow .sc { color: var(--primary); }
+  .mrow .sc.todo { color: var(--ball-deep); }
+  .mrow .winner { color: var(--win); }
+  table.cross th { background: var(--primary); color: #fff; }
+  table.cross td.self { background: repeating-linear-gradient(45deg, var(--surface2), var(--surface2) 4px, var(--border) 4px, var(--border) 5px); }
+  .bm { border-left: 4px solid var(--primary); }
+  .bm:not(:disabled):hover { border-color: var(--ball); }
+  .bm .line.win { color: var(--primary); }
+  .champ { font-family: var(--display); font-weight: 400; font-size: 24px; }
+  .modal { border-top: 5px solid var(--primary); }
+  .modal h3 { font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--primary); letter-spacing: .3px; }
+  .vs .a { color: var(--red); }
+  .vs > span:last-child { color: var(--blue); }
+  .teamscore, .summary { color: var(--primary); }
+  .rub { border-left: 4px solid var(--ball); }
+  .rub-head b { color: var(--primary); }
+  .count span { font-weight: 700; color: var(--primary); }
+  .count.bad span { color: var(--lose); }
+  .resume { border-left: 4px solid var(--ball); background: var(--ball-soft); }
+  .live-top .title { color: var(--ball); font-family: var(--display); font-weight: 400; font-size: 18px; letter-spacing: .5px; }
+  .live-bottom button:hover { border-color: var(--ball); }
+
   @media (max-width: 560px) {
     .card { padding: 18px; }
     .page-title { font-size: 22px; }
@@ -372,7 +442,14 @@
 <header>
   <div class="wrap">
     <div class="head-row">
-      <div class="logo"><div class="logo-mark">🏓</div>탁구 점수판</div>
+      <div class="logo">
+        <svg class="logo-mark" viewBox="0 0 40 40" aria-hidden="true">
+          <rect x="15.5" y="23" width="6" height="15" rx="2.5" fill="#b8783c" transform="rotate(38 18.5 30)"/>
+          <ellipse cx="20" cy="17" rx="12.5" ry="13" fill="#e0302b" stroke="#fff" stroke-width="1.6"/>
+          <circle cx="32.5" cy="7.5" r="5.5" fill="#ff7a1a" stroke="#fff" stroke-width="1.4"/>
+        </svg>
+        <div class="logo-text">탁구 <span class="ball">랠리</span><span class="logo-sub">점수판 · 개인전 · 팀전</span></div>
+      </div>
       <label class="theme">다크
         <span class="switch"><input type="checkbox" id="themeToggle" aria-label="다크 모드"><span></span></span>
       </label>
@@ -388,7 +465,7 @@
 <main class="wrap">
   <!-- ================= 점수판 ================= -->
   <section class="tab" id="tab-score">
-    <h1 class="page-title">탁구 점수판</h1>
+    <h1 class="page-title">탁구 <span class="ball">점수판</span></h1>
     <p class="lead">심판 볼 때 바로 쓰는 터치 점수판입니다. 탭으로 점수를 올리고, 서브권과 듀스를 자동으로 표시합니다.</p>
 
     <div class="card narrow">
@@ -1258,7 +1335,7 @@
   function renderCompSetup(root) {
     const f = store.get("compDraft", { name: "", type: "league", bestOf: 3, primary: "wins", seeding: "order", names: "" });
     root.innerHTML = `
-      <h1 class="page-title">대회 관리</h1>
+      <h1 class="page-title">개인전 <span class="ball">대회</span></h1>
       <p class="lead">${MIN_PLAYERS}~${MAX_PLAYERS}명의 선수로 리그전이나 토너먼트를 만들고, 경기 결과를 입력하면 승패·세트득실률·순위를 자동으로 계산합니다.</p>
       <div class="card narrow">
         <div class="label">대회 이름</div>
@@ -1873,7 +1950,7 @@
   function renderTeamSetup(root) {
     const f = store.get("tDraft", { name: "", mode: "groups", format: "ssdss", bestOf: 3, groups: 3, advance: 2, seeding: "order", text: "" });
     root.innerHTML = `
-      <h1 class="page-title">팀전</h1>
+      <h1 class="page-title">팀전 <span class="ball">단체 대회</span></h1>
       <p class="lead">3명이 한 팀이 되어 팀끼리 겨룹니다. 팀 리그전, 팀 토너먼트, 조별 리그 후 본선 토너먼트를 고를 수 있고, 팀 순위와 선수 개인 기록을 자동으로 계산합니다.</p>
       <div class="card narrow">
         <div class="label">대회 이름</div>
