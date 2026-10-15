@@ -370,6 +370,20 @@
   .hcmini .v { font-weight: 800; color: var(--primary); min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
   .hcmini .note { color: var(--muted); flex-basis: 100%; }
   .divtag { font-size: 11px; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+  .share-btn { border-color: var(--ball); color: var(--ball-deep); }
+  .share-chip {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 12px;
+    font-size: 13px; font-weight: 700; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .share-chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .share-chip.live i { background: var(--win); box-shadow: 0 0 0 3px var(--win-bg); }
+  .share-chip.offline i, .share-chip.connecting i { background: var(--ball); }
+  .share-chip.error i { background: var(--lose); }
+  .share-chip b { color: var(--primary); letter-spacing: 1px; }
+  .code-big {
+    font-family: var(--display); font-size: 38px; letter-spacing: 6px; text-align: center; color: var(--primary);
+    background: var(--primary-soft); border-radius: 12px; padding: 10px; user-select: all; -webkit-user-select: all;
+  }
   .modal.wide { max-width: 640px; }
   .teamscore { font-size: 26px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; }
   .rub { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
@@ -708,10 +722,12 @@
   });
 
   // ---------- 탭 ----------
+  let currentTab = "score";
   function showTab(name) {
     document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     document.querySelectorAll(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
     store.set("tab", name);
+    currentTab = name;
     if (name === "comp") renderComp();
     if (name === "team") renderTeam();
     if (name === "score") renderResume();
@@ -999,7 +1015,7 @@
   let comp = store.get("comp", null);
   let compTab = store.get("compTab", "rank");
   let filterPlayer = "", filterStatus = "all";
-  const saveComp = () => store.set("comp", comp);
+  const saveComp = () => { store.set("comp", comp); queuePush("comp"); };
   const pname = id => comp.players.find(p => p.id === id)?.name ?? "?";
 
   // ---------- 대회 만들기 ----------
@@ -1288,6 +1304,7 @@
           <div class="progress"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
         </div>
         <div class="comp-actions">
+          ${shareBtnHtml("comp")}
           <button class="btn small" id="hcToggleBtn" title="부수 핸디캡 자동 적용">부수 핸디캡 ${comp.useHc !== false ? "켜짐" : "꺼짐"}</button>
           <button class="btn small" id="exportBtn">백업 저장</button>
           <button class="btn small" id="importBtn">백업 불러오기</button>
@@ -1306,6 +1323,7 @@
     });
     $("#exportBtn").onclick = () => openExport("comp");
     $("#importBtn").onclick = openImport;
+    bindShareBtn("comp");
     $("#hcToggleBtn").onclick = () => {
       comp.useHc = comp.useHc === false;
       saveComp(); renderComp();
@@ -1313,7 +1331,7 @@
     };
     $("#newCompBtn").onclick = async () => {
       if (!(await ask("지금 대회 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 대회를 만들까요?", { ok: "새 대회 만들기", danger: true }))) return;
-      comp = null; store.del("comp"); renderComp();
+      leaveShare("comp"); comp = null; store.del("comp"); renderComp();
     };
     const body = $("#compBody");
     if (compTab === "rank") renderRank(body);
@@ -1508,7 +1526,7 @@
 
         <div class="error" id="cErr"></div>
         <button class="btn primary big" id="cCreate">대회 만들기</button>
-        <p class="hint center"><button class="btn small" id="cImport" type="button">백업 파일 불러오기</button></p>
+        <p class="hint center"><button class="btn small" id="cJoin" type="button">대회 코드로 참가</button> <button class="btn small" id="cImport" type="button">백업 파일 불러오기</button></p>
       </div>`;
     const saveDraft = () => store.set("compDraft", f);
     const paint = () => {
@@ -1536,6 +1554,7 @@
       saveDraft(); paint();
     };
     $("#cImport").onclick = openImport;
+    $("#cJoin").onclick = openJoin;
     $("#cCreate").onclick = () => {
       const entries = parseNames($("#cNames").value);
       const err = $("#cErr");
@@ -1753,11 +1772,11 @@
     }
     if (t) {
       if (tcomp && !(await ask("지금 팀전을 백업의 팀전으로 바꿀까요?", { ok: "바꾸기", danger: true }))) return;
-      tcomp = t; saveT(); closeModal(); showTab("team"); toast("팀전 백업을 불러왔습니다");
+      leaveShare("tcomp"); tcomp = t; saveT(); closeModal(); showTab("team"); toast("팀전 백업을 불러왔습니다");
       return;
     }
     if (comp && !(await ask("지금 개인전을 백업의 대회로 바꿀까요?", { ok: "바꾸기", danger: true }))) return;
-    comp = c; saveComp(); closeModal(); showTab("comp"); toast("백업을 불러왔습니다");
+    leaveShare("comp"); comp = c; saveComp(); closeModal(); showTab("comp"); toast("백업을 불러왔습니다");
   }
 
   $("#importFile").addEventListener("change", async e => {
@@ -1787,7 +1806,7 @@
   let tcomp = store.get("tcomp", null);
   let tTab = store.get("tTab", "rank");
   let tFilterTeam = "", tFilterStatus = "all";
-  const saveT = () => store.set("tcomp", tcomp);
+  const saveT = () => { store.set("tcomp", tcomp); queuePush("tcomp"); };
   const tFmt = () => TEAM_FORMATS[tcomp.format];
   const team = id => tcomp.teams.find(t => t.id === id);
   const tName = id => team(id)?.name ?? "?";
@@ -2162,7 +2181,7 @@
 
         <div class="error" id="tfErr"></div>
         <button class="btn primary big" id="tfCreate">팀전 만들기</button>
-        <p class="hint center"><button class="btn small" id="tfImport" type="button">백업 불러오기</button></p>
+        <p class="hint center"><button class="btn small" id="tfJoin" type="button">대회 코드로 참가</button> <button class="btn small" id="tfImport" type="button">백업 불러오기</button></p>
       </div>`;
     const save = () => store.set("tDraft", f);
     const paint = () => {
@@ -2215,6 +2234,7 @@
       save(); paint();
     };
     $("#tfImport").onclick = openImport;
+    $("#tfJoin").onclick = openJoin;
     $("#tfCreate").onclick = () => {
       const err = $("#tfErr");
       const r = parseTeams($("#tfText").value);
@@ -2252,6 +2272,7 @@
           <div class="progress"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
         </div>
         <div class="comp-actions">
+          ${shareBtnHtml("tcomp")}
           <button class="btn small" id="tHcToggle" title="부수 핸디캡 자동 적용">부수 핸디캡 ${tcomp.useHc !== false ? "켜짐" : "꺼짐"}</button>
           <button class="btn small" id="tExport">백업 저장</button>
           <button class="btn small" id="tImport">백업 불러오기</button>
@@ -2270,6 +2291,7 @@
       b.onclick = () => { tTab = b.dataset.st; store.set("tTab", tTab); renderTeam(); };
     });
     $("#tExport").onclick = () => openExport("tcomp");
+    bindShareBtn("tcomp");
     $("#tHcToggle").onclick = () => {
       tcomp.useHc = tcomp.useHc === false;
       saveT(); renderTeam();
@@ -2278,7 +2300,7 @@
     $("#tImport").onclick = openImport;
     $("#tNew").onclick = async () => {
       if (!(await ask("지금 팀전 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 팀전을 만들까요?", { ok: "새 팀전 만들기", danger: true }))) return;
-      tcomp = null; store.del("tcomp"); renderTeam();
+      leaveShare("tcomp"); tcomp = null; store.del("tcomp"); renderTeam();
     };
     const body = $("#teamBody");
     if (tTab === "rank") renderTeamRank(body);
@@ -2634,6 +2656,297 @@
       saveT(); closeModal(); renderTeam(); toast("저장했습니다");
     };
   }
+
+  // =========================================================
+  // 실시간 공유 (Firebase Realtime Database)
+  // =========================================================
+  // 대회 기록을 인터넷에 올려서, 같은 대회 코드를 넣은 휴대폰끼리 실시간으로 함께 봅니다.
+  // 저장 모양: shared/<코드> = { meta, data: 대회(결과 제외, 글자로), results: { 경기ID: 결과(글자로) } }
+  // 경기마다 따로 저장해서, 여러 사람이 다른 경기를 동시에 입력해도 서로 덮어쓰지 않습니다.
+  const SHARE_DB_URL = "https://pingpong-c4cfa-default-rtdb.asia-southeast1.firebasedatabase.app";
+  const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const KIND_NAME = { comp: "개인전", tcomp: "팀전" };
+
+  let share = store.get("share", {});        // { comp: { code }, tcomp: { code } }
+  let pending = store.get("sharePending", {}); // 아직 못 보낸 변경 { comp: { 경로: 값 } }
+  const mirror = store.get("shareMirror", {}); // 서버에 있는 그대로의 사본 (인터넷이 없을 때 비교용으로 저장)
+  const streams = {};
+  const shareStatus = {};
+  const pushTimers = {};
+  const STATUS_TEXT = { live: "실시간 공유 중", connecting: "연결 중…", offline: "연결 끊김 · 다시 연결 중", error: "공유 오류" };
+
+  const getObj = kind => kind === "comp" ? comp : tcomp;
+  const shareUrl = (code, path = "") => `${SHARE_DB_URL.replace(/\/$/, "")}/shared/${code}${path}.json`;
+  const saveShare = () => { store.set("share", share); store.set("sharePending", pending); store.set("shareMirror", mirror); };
+
+  function setStatus(kind, st) {
+    shareStatus[kind] = st;
+    document.querySelectorAll(`[data-chip="${kind}"]`).forEach(chip => {
+      chip.className = "share-chip " + st;
+      chip.querySelector(".t").textContent = STATUS_TEXT[st];
+    });
+  }
+
+  function splitObj(obj) {
+    const { results, ...rest } = obj;
+    const res = {};
+    Object.entries(results || {}).forEach(([id, r]) => res[id] = JSON.stringify(r));
+    return { data: JSON.stringify(rest), results: res };
+  }
+
+  // 경로("results/L1-0")에 값을 넣거나(null이면 지움) 바꿉니다
+  function applyAt(root, path, value) {
+    const segs = path.split("/").filter(Boolean);
+    if (!segs.length) return value;
+    root = root && typeof root === "object" ? root : {};
+    let node = root;
+    segs.slice(0, -1).forEach(s => {
+      if (!node[s] || typeof node[s] !== "object") node[s] = {};
+      node = node[s];
+    });
+    const last = segs[segs.length - 1];
+    if (value === null) delete node[last]; else node[last] = value;
+    return root;
+  }
+
+  // 서버 사본 + 아직 못 보낸 내 변경 → 화면에 쓸 대회
+  function rebuild(kind) {
+    const m = mirror[kind];
+    if (!m || !m.data) return;
+    let view = { data: m.data, results: { ...(m.results || {}) } };
+    Object.entries(pending[kind] || {}).forEach(([p, v]) => { if (p !== "meta/updated") view = applyAt(view, p, v); });
+    let obj;
+    try {
+      obj = JSON.parse(view.data);
+      obj.results = {};
+      Object.entries(view.results || {}).forEach(([id, s]) => { try { obj.results[id] = JSON.parse(s); } catch {} });
+    } catch { return; }
+    if (kind === "comp") { comp = obj; store.set("comp", comp); }
+    else { tcomp = obj; store.set("tcomp", tcomp); }
+    if (kind === "comp" && currentTab === "comp") renderComp();
+    if (kind === "tcomp" && currentTab === "team") renderTeam();
+  }
+
+  function connect(kind) {
+    const sh = share[kind];
+    streams[kind]?.close();
+    if (!sh || !SHARE_DB_URL || typeof EventSource === "undefined") return;
+    setStatus(kind, "connecting");
+    const es = new EventSource(shareUrl(sh.code));
+    streams[kind] = es;
+    const onData = (ev, isPatch) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (!msg) return;
+      if (isPatch) Object.entries(msg.data || {}).forEach(([k, v]) => { mirror[kind] = applyAt(mirror[kind], msg.path + "/" + k, v); });
+      else mirror[kind] = applyAt(mirror[kind], msg.path, msg.data);
+      setStatus(kind, "live");
+      if (!mirror[kind]) { setStatus(kind, "error"); return; }
+      saveShare();
+      rebuild(kind);
+      if (Object.keys(pending[kind] || {}).length) flush(kind);
+    };
+    es.addEventListener("put", ev => onData(ev, false));
+    es.addEventListener("patch", ev => onData(ev, true));
+    es.addEventListener("cancel", () => setStatus(kind, "error"));
+    es.onerror = () => setStatus(kind, "offline");
+  }
+
+  // 내 휴대폰에서 바뀐 것만 골라 서버에 보냅니다
+  function queuePush(kind) {
+    if (!share[kind] || !mirror[kind]) return;
+    clearTimeout(pushTimers[kind]);
+    pushTimers[kind] = setTimeout(() => pushDiff(kind), 250);
+  }
+  function pushDiff(kind) {
+    const obj = getObj(kind);
+    if (!obj || !mirror[kind]) return;
+    const local = splitObj(obj), remote = mirror[kind];
+    const ops = {};
+    if (local.data !== remote.data) ops.data = local.data;
+    const rr = remote.results || {};
+    Object.entries(local.results).forEach(([id, s]) => { if (rr[id] !== s) ops["results/" + id] = s; });
+    Object.keys(rr).forEach(id => { if (!(id in local.results)) ops["results/" + id] = null; });
+    // 이미 보내려고 모아 둔 변경 중 지금과 다른 것은 새 값으로 바뀝니다
+    const pend = { ...(pending[kind] || {}) };
+    Object.keys(pend).forEach(p => { if (!(p in ops) && p !== "meta/updated") delete pend[p]; });
+    Object.assign(pend, ops);
+    if (!Object.keys(pend).length) return;
+    pend["meta/updated"] = { ".sv": "timestamp" };
+    pending[kind] = pend;
+    saveShare();
+    flush(kind);
+  }
+  let flushing = {};
+  async function flush(kind) {
+    const sh = share[kind], ops = pending[kind];
+    if (!sh || !ops || !Object.keys(ops).length || flushing[kind]) return;
+    flushing[kind] = true;
+    const sent = { ...ops };
+    try {
+      const r = await fetch(shareUrl(sh.code), { method: "PATCH", body: JSON.stringify(sent) });
+      if (!r.ok) throw new Error(r.status);
+      Object.entries(sent).forEach(([p, v]) => {
+        if (p !== "meta/updated") mirror[kind] = applyAt(mirror[kind], p, v);
+        if (JSON.stringify(pending[kind]?.[p]) === JSON.stringify(v)) delete pending[kind][p];
+      });
+      if (Object.keys(pending[kind]).length === 1 && pending[kind]["meta/updated"]) pending[kind] = {};
+      saveShare();
+      if (shareStatus[kind] !== "live") setStatus(kind, "live");
+    } catch {
+      setStatus(kind, "offline");
+      setTimeout(() => flush(kind), 5000);
+    } finally {
+      flushing[kind] = false;
+    }
+  }
+  window.addEventListener("online", () => Object.keys(share).forEach(k => { connect(k); flush(k); }));
+
+  function leaveShare(kind) {
+    streams[kind]?.close();
+    delete streams[kind];
+    delete share[kind];
+    delete pending[kind];
+    delete mirror[kind];
+    saveShare();
+  }
+
+  function newCode() {
+    const a = new Uint32Array(8);
+    crypto.getRandomValues(a);
+    return [...a].map(n => CODE_CHARS[n % CODE_CHARS.length]).join("");
+  }
+
+  async function startShare(kind) {
+    const obj = getObj(kind);
+    if (!obj) return;
+    const code = newCode();
+    const parts = splitObj(obj);
+    const body = { meta: { kind, name: obj.name, created: { ".sv": "timestamp" } }, ...parts };
+    const r = await fetch(shareUrl(code), { method: "PUT", body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(r.status);
+    share[kind] = { code };
+    pending[kind] = {};
+    mirror[kind] = { meta: { kind, name: obj.name }, ...parts };
+    saveShare();
+    connect(kind);
+    return code;
+  }
+
+  async function joinShare(code) {
+    const r = await fetch(shareUrl(code));
+    if (!r.ok) throw new Error("network");
+    const data = await r.json();
+    if (!data || !data.data || !KIND_NAME[data.meta?.kind]) return null;
+    const kind = data.meta.kind;
+    if (getObj(kind) && share[kind]?.code !== code &&
+      !(await ask(`이 휴대폰의 ${KIND_NAME[kind]} 기록이 공유 대회 '${data.meta.name || code}'로 바뀝니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 계속할까요?`, { ok: "참가하기", danger: true }))) return "cancel";
+    leaveShare(kind);
+    share[kind] = { code };
+    mirror[kind] = data;
+    saveShare();
+    rebuild(kind);
+    connect(kind);
+    return kind;
+  }
+
+  // ---------- 화면 ----------
+  function shareBtnHtml(kind) {
+    const sh = share[kind];
+    if (!sh) return `<button class="btn small share-btn" id="shareBtn-${kind}">📡 실시간 공유</button>`;
+    const st = shareStatus[kind] || "connecting";
+    return `<button class="share-chip ${st}" id="shareChip-${kind}" data-chip="${kind}" title="공유 정보 보기"><i></i><span class="t">${STATUS_TEXT[st]}</span><b>${sh.code}</b></button>`;
+  }
+  function bindShareBtn(kind) {
+    const btn = document.getElementById("shareBtn-" + kind) || document.getElementById("shareChip-" + kind);
+    if (btn) btn.onclick = () => openShare(kind);
+  }
+
+  function openShare(kind) {
+    const sh = share[kind];
+    if (!SHARE_DB_URL) {
+      notify("이 화면에서는 실시간 공유를 쓸 수 없습니다. https://hwanginho77.github.io/pingpong/ 에서 설치한 앱으로 써 주세요.");
+      return;
+    }
+    if (!sh) {
+      openModal(`
+        <h3>실시간 공유</h3>
+        <p style="margin-top:0">이 ${KIND_NAME[kind]}를 인터넷에 올리고 <b>대회 코드</b>를 만듭니다. 코드를 받은 사람은 앱에서 <b>대회 코드로 참가</b>를 눌러 함께 보고, 결과도 입력할 수 있습니다.</p>
+        <p class="hint">코드를 아는 사람은 누구나 결과를 고칠 수 있으니 대회 참가자에게만 알려 주세요.</p>
+        <div class="error" id="shErr"></div>
+        <div class="btns"><button class="btn" id="shCancel">취소</button><button class="btn primary" id="shGo">공유 시작</button></div>`);
+      $("#shCancel").onclick = closeModal;
+      $("#shGo").onclick = async () => {
+        $("#shGo").disabled = true;
+        try {
+          await startShare(kind);
+          closeModal();
+          kind === "comp" ? renderComp() : renderTeam();
+          openShare(kind);
+        } catch {
+          $("#shErr").textContent = "공유를 시작하지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.";
+          $("#shGo").disabled = false;
+        }
+      };
+      return;
+    }
+    const nPend = Object.keys(pending[kind] || {}).filter(p => p !== "meta/updated").length;
+    openModal(`
+      <h3>실시간 공유 중</h3>
+      <p style="margin:0 0 6px">대회 코드</p>
+      <div class="code-big" id="shCode">${sh.code}</div>
+      <p class="hint center">다른 사람은 앱의 <b>${KIND_NAME[kind]}</b> 탭 → <b>대회 코드로 참가</b>에 이 코드를 넣으면 됩니다.</p>
+      <p class="center" style="margin:12px 0 0"><span class="share-chip ${shareStatus[kind] || "connecting"}" data-chip="${kind}"><i></i><span class="t">${STATUS_TEXT[shareStatus[kind] || "connecting"]}</span></span></p>
+      ${nPend ? `<p class="hint center">아직 보내지 못한 변경 ${nPend}건 · 인터넷이 연결되면 자동으로 보냅니다.</p>` : ""}
+      <div class="btns">
+        <button class="btn danger" id="shLeave">이 휴대폰에서 공유 끊기</button>
+        <button class="btn" id="shCopy">코드 복사</button>
+        <button class="btn primary" id="shClose">닫기</button>
+      </div>`);
+    $("#shClose").onclick = closeModal;
+    $("#shCopy").onclick = async () => {
+      const text = `핑퐁 시합 매니저 ${KIND_NAME[kind]} 대회 코드: ${sh.code}\n앱: https://hwanginho77.github.io/pingpong/`;
+      try { await navigator.clipboard.writeText(text); toast("복사했습니다"); }
+      catch { toast("코드를 길게 눌러 복사하세요"); }
+    };
+    $("#shLeave").onclick = async () => {
+      if (!(await ask("이 휴대폰만 공유에서 빠집니다. 지금까지의 기록은 이 휴대폰에 남고, 다른 사람들의 공유는 계속됩니다. 끊을까요?", { ok: "공유 끊기", danger: true }))) return;
+      leaveShare(kind);
+      closeModal();
+      kind === "comp" ? renderComp() : renderTeam();
+      toast("공유를 끊었습니다");
+    };
+  }
+
+  function openJoin() {
+    if (!SHARE_DB_URL) { notify("이 화면에서는 실시간 공유를 쓸 수 없습니다. https://hwanginho77.github.io/pingpong/ 에서 설치한 앱으로 써 주세요."); return; }
+    openModal(`
+      <h3>대회 코드로 참가</h3>
+      <p class="hint" style="margin-top:0">대회를 공유한 사람에게 받은 8자리 코드를 넣어 주세요.</p>
+      <input type="text" id="jnCode" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="예: K7M2Q9XA" style="text-transform:uppercase;font-size:22px;font-weight:800;letter-spacing:4px;text-align:center">
+      <div class="error" id="jnErr"></div>
+      <div class="btns"><button class="btn" id="jnCancel">취소</button><button class="btn primary" id="jnGo">참가하기</button></div>`);
+    $("#jnCancel").onclick = closeModal;
+    $("#jnGo").onclick = async () => {
+      const code = $("#jnCode").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (!/^[A-Z2-9]{8}$/.test(code)) { $("#jnErr").textContent = "코드는 영문 대문자와 숫자 8자리입니다."; return; }
+      $("#jnGo").disabled = true;
+      try {
+        const kind = await joinShare(code);
+        if (kind === "cancel") { $("#jnGo").disabled = false; return; }
+        if (!kind) { $("#jnErr").textContent = "이 코드의 대회를 찾을 수 없습니다. 코드를 다시 확인해 주세요."; $("#jnGo").disabled = false; return; }
+        closeModal();
+        showTab(kind === "comp" ? "comp" : "team");
+        toast("공유 대회에 참가했습니다");
+      } catch {
+        $("#jnErr").textContent = "연결하지 못했습니다. 인터넷 연결을 확인해 주세요.";
+        $("#jnGo").disabled = false;
+      }
+    };
+  }
+
+  // 앱을 다시 열면 공유 중이던 대회에 다시 연결합니다
+  Object.keys(share).forEach(kind => connect(kind));
 
   // =========================================================
   // 시작
