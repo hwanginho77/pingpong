@@ -384,6 +384,11 @@
     font-family: var(--display); font-size: 38px; letter-spacing: 6px; text-align: center; color: var(--primary);
     background: var(--primary-soft); border-radius: 12px; padding: 10px; user-select: all; -webkit-user-select: all;
   }
+  .rest-toggle {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px;
+    border-radius: 10px; background: var(--ball-soft); font-size: 14px; cursor: pointer;
+  }
+  .rest-toggle input { width: 18px; height: 18px; accent-color: var(--ball-deep); }
   .modal.wide { max-width: 640px; }
   .teamscore { font-size: 26px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; }
   .rub { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
@@ -1958,9 +1963,10 @@
     }
   }
 
-  async function tSetResult(m, rubbers) {
+  // playAll = 팀 승부가 난 뒤에도 남은 개인 경기를 치르는 대전
+  async function tSetResult(m, rubbers, playAll = m.result?.playAll ?? tcomp.playRest ?? false) {
     const old = tcomp.results[m.id];
-    tcomp.results[m.id] = { p1: m.p1, p2: m.p2, rubbers };
+    tcomp.results[m.id] = { p1: m.p1, p2: m.p2, rubbers, ...(playAll ? { playAll: true } : {}) };
     if (staleResults().length && !(await ask("이 결과 때문에 대진이 바뀌어 이후 경기 결과 일부가 지워집니다. 계속할까요?", { ok: "계속", danger: true }))) {
       if (old) tcomp.results[m.id] = old; else delete tcomp.results[m.id];
       return false;
@@ -2118,7 +2124,7 @@
       id: "t" + (i + 1), name: t.name,
       players: t.players.map((p, j) => ({ id: `t${i + 1}p${j + 1}`, name: p.name, div: p.div })),
     }));
-    const c = { name: f.name, mode: f.mode, format: f.format, teamSize: f.teamSize, bestOf: f.bestOf, useHc: f.useHc !== false, teams, results: {}, created: Date.now() };
+    const c = { name: f.name, mode: f.mode, format: f.format, teamSize: f.teamSize, bestOf: f.bestOf, useHc: f.useHc !== false, playRest: f.playRest === true, teams, results: {}, created: Date.now() };
     const order = (f.seeding === "random" ? shuffle(teams) : teams).map(t => t.id);
     if (f.mode === "league") c.matches = makeLeague(teams.map(t => t.id));
     else if (f.mode === "knockout") {
@@ -2175,6 +2181,13 @@
         <div class="label">팀 경기 방식</div>
         <div class="seg" id="tfFormat"></div>
         <p class="hint" id="tfFormatHint"></p>
+
+        <div class="label">승부가 난 뒤 남은 경기</div>
+        <div class="seg" id="tfRest">
+          <button data-v="stop">하지 않음</button>
+          <button data-v="play">계속 진행</button>
+        </div>
+        <p class="hint">예: 단·단·복에서 2:0, 단·단·복·단·단에서 3:0이 되었을 때 남은 경기를 할지 정합니다. 대전마다 경기 입력 창에서 바꿀 수 있고, 남은 경기 결과도 개인 기록과 매치 득실에 들어갑니다.</p>
 
         <div class="label">개인 경기 방식 (11점)</div>
         <div class="seg" id="tfBo">
@@ -2257,6 +2270,7 @@
     makeSeg($("#tfBo"), f.bestOf, v => { f.bestOf = Number(v); save(); });
     makeSeg($("#tfSeed"), f.seeding, v => { f.seeding = v; save(); });
     makeSeg($("#tfHc"), f.useHc === false ? "off" : "on", v => { f.useHc = v === "on"; save(); });
+    makeSeg($("#tfRest"), f.playRest ? "play" : "stop", v => { f.playRest = v === "play"; save(); });
     $("#tfGroups").onchange = e => { f.groups = Number(e.target.value); save(); paint(); };
     $("#tfAdvance").onchange = e => { f.advance = Number(e.target.value); save(); paint(); };
     $("#tfName").oninput = e => { f.name = e.target.value; save(); };
@@ -2544,6 +2558,7 @@
       <h3>팀 경기 · ${matchLabel(m)}</h3>
       <div class="vs"><span class="a"><span class="dot red"></span> ${esc(A.name)}</span><span id="tScore" class="teamscore">0 : 0</span><span>${esc(B.name)} <span class="dot blue"></span></span></div>
       <p class="hint" style="margin:0 0 10px">출전 선수(오더)를 고르고 세트 점수를 입력하세요. 아직 하지 않은 경기는 비워 두면 '진행 중'으로 저장됩니다. 핸디캡은 '점수판'으로 경기할 때 시작 점수로 쓰입니다.</p>
+      <label class="rest-toggle"><input type="checkbox" id="tPlayAll" ${(m.result?.playAll ?? tcomp.playRest) ? "checked" : ""}> 팀 승부가 나도 <b>남은 경기 계속 진행</b></label>
       ${rubHtml}
       <div class="error" id="tErr"></div>
       <div class="btns">
@@ -2552,6 +2567,7 @@
         <button class="btn primary" id="tSave">저장</button>
       </div>`, true);
 
+    const playAll = () => $("#tPlayAll").checked;
     const readRubber = i => ({
       h: [...document.querySelectorAll(`#modal select[data-r="${i}"][data-side="h"]`)].map(s => s.value),
       a: [...document.querySelectorAll(`#modal select[data-r="${i}"][data-side="a"]`)].map(s => s.value),
@@ -2568,10 +2584,10 @@
         if (sameDouble(h, a)) err ||= `${labels[i]}: 복식은 서로 다른 두 선수를 골라 주세요.`;
         if (!rows.some(([x, y]) => x !== "" || y !== "")) {
           rubbers.push(null);
-          st.textContent = decidedAt >= 0 ? "팀 승부가 나서 하지 않음" : "경기 전";
+          st.textContent = decidedAt < 0 ? "경기 전" : playAll() ? "경기 전 (승부 결정 후 경기)" : "팀 승부가 나서 하지 않음";
           return;
         }
-        if (decidedAt >= 0) err ||= `${labels[i]}: 팀 승부가 이미 났습니다. 이 경기 점수는 비워 주세요.`;
+        if (decidedAt >= 0 && !playAll()) err ||= `${labels[i]}: 팀 승부가 이미 났습니다. 남은 경기도 하려면 위의 '남은 경기 계속 진행'을 켜 주세요.`;
         const sets = [];
         let ended = false, bad = "";
         rows.forEach(([x, y], s) => {
@@ -2597,11 +2613,11 @@
         if (decidedAt < 0 && (w[0] >= fmt.need || w[1] >= fmt.need)) decidedAt = i;
       });
       $("#tScore").textContent = `${w[0]} : ${w[1]}`;
-      fmt.rubbers.forEach((_, i) => $(`#rub${i}`).classList.toggle("off", decidedAt >= 0 && i > decidedAt && !rubbers[i]));
+      fmt.rubbers.forEach((_, i) => $(`#rub${i}`).classList.toggle("off", !playAll() && decidedAt >= 0 && i > decidedAt && !rubbers[i]));
       return { rubbers, w, err, done: decidedAt >= 0 };
     };
     const refresh = () => { const r = check(); $("#tErr").textContent = r.err; return r; };
-    document.querySelectorAll("#modal input, #modal select").forEach(el => el.addEventListener(el.tagName === "SELECT" ? "change" : "input", refresh));
+    document.querySelectorAll("#modal input, #modal select").forEach(el => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", refresh));
     check();
 
     // 개인 경기마다 핸디캡 (출전 선수를 바꾸면 부수대로 다시 계산)
@@ -2620,7 +2636,7 @@
       const r = refresh();
       if (r.err) return;
       if (!r.rubbers.some(Boolean)) { $("#tErr").textContent = "입력된 개인 경기가 없습니다."; return; }
-      if (!(await tSetResult(m, r.rubbers))) return;
+      if (!(await tSetResult(m, r.rubbers, playAll()))) return;
       closeModal(); renderTeam();
       toast(r.done ? "저장했습니다" : "진행 중인 결과로 저장했습니다");
     };
@@ -2636,7 +2652,7 @@
       if (sb && !sb.done && !(await ask("점수판에 진행 중인 다른 경기가 있습니다. 새로 시작할까요?", { ok: "새로 시작" }))) return;
       // 다른 개인 경기에 입력해 둔 점수는 먼저 저장합니다
       const keep = r.rubbers.map((x, k) => k === i ? null : x);
-      if (keep.some(Boolean)) { if (!(await tSetResult(m, keep))) return; }
+      if (keep.some(Boolean) || playAll()) { if (!(await tSetResult(m, keep, playAll()))) return; }
       else if (m.result) { delete tcomp.results[m.id]; saveT(); }
       closeModal();
       startScoreboard({
