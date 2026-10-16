@@ -399,6 +399,24 @@
     border-radius: 10px; background: var(--ball-soft); font-size: 14px; cursor: pointer;
   }
   .rest-toggle input { width: 18px; height: 18px; accent-color: var(--ball-deep); }
+  @media (max-width: 480px) { nav.tabs button { padding: 10px 9px; font-size: 14px; } }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .tools input[type=text], .tools select { width: auto; flex: 1; min-width: 140px; padding: 8px 10px; }
+  .tools .chk { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); }
+  .section-card { margin-bottom: 22px; }
+  .section-card h2 { font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--primary); margin: 0 0 4px; }
+  .section-card .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  table.std tr.click { cursor: pointer; }
+  .arch { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .arch:last-child { border-bottom: 0; }
+  .arch .t { font-weight: 800; color: var(--text); }
+  .arch .d { color: var(--muted); font-size: 13px; }
+  .arch .b { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .pick-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; margin-top: 8px; }
+  .pick-list label { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .pick-list label:last-child { border-bottom: 0; }
+  .pick-list input { width: 18px; height: 18px; accent-color: var(--primary); }
+  .empty { text-align: center; color: var(--muted); padding: 26px 10px; }
   .modal.wide { max-width: 640px; }
   .teamscore { font-size: 26px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; }
   .rub { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
@@ -506,6 +524,8 @@
       <button data-tab="score">점수판</button>
       <button data-tab="comp">개인전</button>
       <button data-tab="team">팀전</button>
+      <button data-tab="members">회원</button>
+      <button data-tab="records">기록</button>
     </nav>
   </div>
 </header>
@@ -583,6 +603,16 @@
   <!-- ================= 팀전 ================= -->
   <section class="tab" id="tab-team">
     <div id="teamRoot"></div>
+  </section>
+
+  <!-- ================= 회원 명부 ================= -->
+  <section class="tab" id="tab-members">
+    <div id="memberRoot"></div>
+  </section>
+
+  <!-- ================= 기록 (월별 누적 순위 · 보관함) ================= -->
+  <section class="tab" id="tab-records">
+    <div id="recordRoot"></div>
   </section>
 </main>
 
@@ -751,6 +781,8 @@
     currentTab = name;
     if (name === "comp") renderComp();
     if (name === "team") renderTeam();
+    if (name === "members") renderMembers();
+    if (name === "records") renderRecords();
     if (name === "score") renderResume();
   }
   document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
@@ -1163,7 +1195,7 @@
         if (later && !(await ask("승자가 바뀌어서 이후 라운드의 관련 경기 결과가 지워집니다. 계속할까요?", { ok: "계속", danger: true }))) return false;
       }
     }
-    comp.results[m.id] = { p1: m.p1, p2: m.p2, sets };
+    comp.results[m.id] = { p1: m.p1, p2: m.p2, sets, at: Date.now() };
     pruneKnockout();
     saveComp();
     return true;
@@ -1327,6 +1359,7 @@
         <div class="comp-actions">
           ${shareBtnHtml("comp")}
           <button class="btn small" id="hcToggleBtn" title="부수 핸디캡 자동 적용">부수 핸디캡 ${comp.useHc !== false ? "켜짐" : "꺼짐"}</button>
+          <button class="btn small" id="compExcel">📊 엑셀</button>
           <button class="btn small" id="exportBtn">백업 저장</button>
           <button class="btn small" id="importBtn">백업 불러오기</button>
           <button class="btn small danger" id="newCompBtn">새 대회</button>
@@ -1343,6 +1376,7 @@
       b.onclick = () => { compTab = b.dataset.st; store.set("compTab", compTab); renderComp(); };
     });
     $("#exportBtn").onclick = () => openExport("comp");
+    $("#compExcel").onclick = () => deliverExcel(comp.name, compSheets(comp));
     $("#importBtn").onclick = openImport;
     bindShareBtn("comp");
     $("#hcToggleBtn").onclick = () => {
@@ -1351,7 +1385,8 @@
       toast(comp.useHc ? "부수 핸디캡을 자동으로 적용합니다" : "부수 핸디캡을 끕니다");
     };
     $("#newCompBtn").onclick = async () => {
-      if (!(await ask("지금 대회 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 대회를 만들까요?", { ok: "새 대회 만들기", danger: true }))) return;
+      if (!(await ask("지금 대회는 '기록' 탭의 보관함에 저장되고, 새 대회를 만듭니다. 계속할까요?", { ok: "새 대회 만들기" }))) return;
+      archiveComp("comp");
       leaveShare("comp"); comp = null; store.del("comp"); renderComp();
     };
     const body = $("#compBody");
@@ -1542,7 +1577,7 @@
 
         <div class="label">선수 명단 (한 줄에 한 명)</div>
         <textarea id="cNames" rows="10" placeholder="홍길동 3부&#10;김철수 S급&#10;이영희 7부&#10;...">${esc(f.names)}</textarea>
-        <div class="count" id="cCount"><span></span><button class="btn small" id="cSample" type="button">예시 이름 넣기</button></div>
+        <div class="count" id="cCount"><span></span><span style="display:flex;gap:6px"><button class="btn small" id="cPick" type="button">👥 명부에서 불러오기</button><button class="btn small" id="cSample" type="button">예시 이름 넣기</button></span></div>
         <p class="hint">이름 뒤에 부수를 적어 주세요. 예: <b>홍길동 3부</b>, <b>김철수 S급</b>, <b>이영희(7부)</b>. 부수를 안 적으면 핸디캡은 0점으로 시작합니다.</p>
 
         <div class="error" id="cErr"></div>
@@ -1569,6 +1604,14 @@
     makeSeg($("#cSeed"), f.seeding, v => { f.seeding = v; saveDraft(); });
     $("#cName").oninput = e => { f.name = e.target.value; saveDraft(); };
     $("#cNames").oninput = e => { f.names = e.target.value; saveDraft(); paint(); };
+    $("#cPick").onclick = () => openMemberPicker(false, list => {
+      const have = new Set(parseNames($("#cNames").value).map(e => e.name));
+      const lines = list.filter(mb => !have.has(mb.name)).map(mb => (mb.name + " " + divLabel(mb.div)).trim());
+      const cur = $("#cNames").value.trim();
+      $("#cNames").value = f.names = (cur ? cur + "\n" : "") + lines.join("\n");
+      saveDraft(); paint();
+      toast(`${lines.length}명을 넣었습니다`);
+    });
     $("#cSample").onclick = () => {
       const sample = ["김민준 S급", "이서연 1부", "박지호 2부", "최수아 3부", "정우진 3부", "강하은 4부", "조현우 5부", "윤지민 5부", "장도윤 6부", "임서준 7부", "한예린 8부", "오승현 9부"];
       $("#cNames").value = f.names = sample.join("\n");
@@ -1793,11 +1836,11 @@
     }
     if (t) {
       if (tcomp && !(await ask("지금 팀전을 백업의 팀전으로 바꿀까요?", { ok: "바꾸기", danger: true }))) return;
-      leaveShare("tcomp"); tcomp = t; saveT(); closeModal(); showTab("team"); toast("팀전 백업을 불러왔습니다");
+      archiveComp("tcomp"); leaveShare("tcomp"); tcomp = t; saveT(); closeModal(); showTab("team"); toast("팀전 백업을 불러왔습니다");
       return;
     }
     if (comp && !(await ask("지금 개인전을 백업의 대회로 바꿀까요?", { ok: "바꾸기", danger: true }))) return;
-    leaveShare("comp"); comp = c; saveComp(); closeModal(); showTab("comp"); toast("백업을 불러왔습니다");
+    archiveComp("comp"); leaveShare("comp"); comp = c; saveComp(); closeModal(); showTab("comp"); toast("백업을 불러왔습니다");
   }
 
   $("#importFile").addEventListener("change", async e => {
@@ -1982,7 +2025,7 @@
   // playAll = 팀 승부가 난 뒤에도 남은 개인 경기를 치르는 대전
   async function tSetResult(m, rubbers, playAll = m.result?.playAll ?? tcomp.playRest ?? false) {
     const old = tcomp.results[m.id];
-    tcomp.results[m.id] = { p1: m.p1, p2: m.p2, rubbers, ...(playAll ? { playAll: true } : {}) };
+    tcomp.results[m.id] = { p1: m.p1, p2: m.p2, rubbers, at: Date.now(), ...(playAll ? { playAll: true } : {}) };
     if (staleResults().length && !(await ask("이 결과 때문에 대진이 바뀌어 이후 경기 결과 일부가 지워집니다. 계속할까요?", { ok: "계속", danger: true }))) {
       if (old) tcomp.results[m.id] = old; else delete tcomp.results[m.id];
       return false;
@@ -2231,7 +2274,7 @@
 
         <div class="label">팀 명단 (한 줄에 한 팀)</div>
         <textarea id="tfText" rows="12" placeholder="번개: 김민준 2부, 이서연 4부, 박지호 6부&#10;스매시: 최수아 S급, 정우진 5부, 강하은 7부&#10;...">${esc(f.text)}</textarea>
-        <div class="count" id="tfCount"><span></span><button class="btn small" id="tfSample" type="button">예시 12팀 넣기</button></div>
+        <div class="count" id="tfCount"><span></span><span style="display:flex;gap:6px"><button class="btn small" id="tfPick" type="button">👥 명부에서 한 팀 넣기</button><button class="btn small" id="tfSample" type="button">예시 12팀 넣기</button></span></div>
         <p class="hint" id="tfRosterHint"></p>
 
         <div class="error" id="tfErr"></div>
@@ -2291,6 +2334,13 @@
     $("#tfAdvance").onchange = e => { f.advance = Number(e.target.value); save(); paint(); };
     $("#tfName").oninput = e => { f.name = e.target.value; save(); };
     $("#tfText").oninput = e => { f.text = e.target.value; save(); paint(); };
+    $("#tfPick").onclick = () => openMemberPicker(true, (list, teamName) => {
+      const line = `${teamName}: ${list.map(mb => (mb.name + " " + divLabel(mb.div)).trim()).join(", ")}`;
+      const cur = $("#tfText").value.trim();
+      $("#tfText").value = f.text = (cur ? cur + "\n" : "") + line;
+      save(); paint();
+      toast(`${teamName} 팀을 넣었습니다`);
+    });
     $("#tfSample").onclick = () => {
       const tn = ["번개", "스매시", "드라이브", "커트", "루프", "백핸드", "포핸드", "서브왕", "랠리", "에이스", "펜홀더", "셰이크"];
       const sur = "김이박최정강조윤장임한오서신권황안송";
@@ -2350,6 +2400,7 @@
         <div class="comp-actions">
           ${shareBtnHtml("tcomp")}
           <button class="btn small" id="tHcToggle" title="부수 핸디캡 자동 적용">부수 핸디캡 ${tcomp.useHc !== false ? "켜짐" : "꺼짐"}</button>
+          <button class="btn small" id="teamExcel">📊 엑셀</button>
           <button class="btn small" id="tExport">백업 저장</button>
           <button class="btn small" id="tImport">백업 불러오기</button>
           <button class="btn small danger" id="tNew">새 팀전</button>
@@ -2367,6 +2418,7 @@
       b.onclick = () => { tTab = b.dataset.st; store.set("tTab", tTab); renderTeam(); };
     });
     $("#tExport").onclick = () => openExport("tcomp");
+    $("#teamExcel").onclick = () => deliverExcel(tcomp.name, teamSheets(tcomp));
     bindShareBtn("tcomp");
     $("#tHcToggle").onclick = () => {
       tcomp.useHc = tcomp.useHc === false;
@@ -2375,7 +2427,8 @@
     };
     $("#tImport").onclick = openImport;
     $("#tNew").onclick = async () => {
-      if (!(await ask("지금 팀전 기록이 모두 지워집니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 새 팀전을 만들까요?", { ok: "새 팀전 만들기", danger: true }))) return;
+      if (!(await ask("지금 팀전은 '기록' 탭의 보관함에 저장되고, 새 팀전을 만듭니다. 계속할까요?", { ok: "새 팀전 만들기" }))) return;
+      archiveComp("tcomp");
       leaveShare("tcomp"); tcomp = null; store.del("tcomp"); renderTeam();
     };
     const body = $("#teamBody");
@@ -2918,7 +2971,8 @@
     if (!data || !data.data || !KIND_NAME[data.meta?.kind]) return null;
     const kind = data.meta.kind;
     if (getObj(kind) && share[kind]?.code !== code &&
-      !(await ask(`이 휴대폰의 ${KIND_NAME[kind]} 기록이 공유 대회 '${data.meta.name || code}'로 바뀝니다. 먼저 '백업 저장'을 해 두는 것을 권장합니다. 계속할까요?`, { ok: "참가하기", danger: true }))) return "cancel";
+      !(await ask(`이 휴대폰의 ${KIND_NAME[kind]} 화면이 공유 대회 '${data.meta.name || code}'로 바뀝니다. 지금 대회는 '기록' 탭 보관함에 저장됩니다. 계속할까요?`, { ok: "참가하기" }))) return "cancel";
+    if (share[kind]?.code !== code) archiveComp(kind);
     leaveShare(kind);
     share[kind] = { code };
     mirror[kind] = data;
@@ -3025,6 +3079,442 @@
 
   // 앱을 다시 열면 공유 중이던 대회에 다시 연결합니다
   Object.keys(share).forEach(kind => connect(kind));
+
+  // =========================================================
+  // 엑셀 내보내기
+  // =========================================================
+  // 진짜 엑셀(.xlsx)은 SheetJS로 만들고, 인터넷이 없어 불러오지 못하면 엑셀에서 열리는 CSV로 만듭니다.
+  const FILE_EXPORT = true;
+  const fmtDate = ts => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const monthKey = ts => fmtDate(ts).slice(0, 7);
+  const monthLabel = k => k === "all" ? "전체 기간" : `${k.slice(0, 4)}년 ${Number(k.slice(5))}월`;
+
+  function loadXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = () => window.XLSX ? res(window.XLSX) : rej(new Error("xlsx"));
+      s.onerror = () => rej(new Error("xlsx"));
+      document.head.appendChild(s);
+      setTimeout(() => rej(new Error("timeout")), 15000);
+    });
+  }
+  const csvCell = v => { const s = String(v ?? ""); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+
+  // sheets = [{ name, rows: [[머리글…], [값…], …] }]
+  async function deliverExcel(baseName, sheets) {
+    if (!FILE_EXPORT) { notify("이 화면에서는 파일 저장이 막혀 있습니다. https://hwanginho77.github.io/pingpong/ 앱에서 써 주세요."); return; }
+    toast("엑셀 파일을 만드는 중…");
+    let blob, ext = "xlsx";
+    try {
+      const X = await loadXLSX();
+      const wb = X.utils.book_new();
+      sheets.forEach(s => {
+        const ws = X.utils.aoa_to_sheet(s.rows);
+        const widths = (s.rows[0] || []).map((_, i) => Math.min(40, Math.max(6, ...s.rows.map(r => [...String(r[i] ?? "")].reduce((n, ch) => n + (ch.charCodeAt(0) > 255 ? 2 : 1), 0) + 2))));
+        ws["!cols"] = widths.map(w => ({ wch: w }));
+        X.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+      });
+      blob = new Blob([X.write(wb, { bookType: "xlsx", type: "array" })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    } catch {
+      ext = "csv";
+      const csv = sheets.map(s => [`[${s.name}]`, ...s.rows.map(r => r.map(csvCell).join(","))].join("\r\n")).join("\r\n\r\n");
+      blob = new Blob(["﻿" + csv], { type: "text/csv" });
+    }
+    const filename = `${baseName.replace(/[\\/:*?"<>|]/g, "_")}.${ext}`;
+    const file = new File([blob], filename, { type: blob.type });
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    openModal(`
+      <h3>엑셀 내보내기</h3>
+      <p style="margin-top:0"><b>${esc(filename)}</b> 파일을 만들었습니다. (${sheets.map(s => esc(s.name)).join(" · ")})</p>
+      ${ext === "csv" ? `<p class="hint">인터넷이 연결되지 않아 엑셀에서 열리는 CSV 파일로 만들었습니다. 연결된 상태에서 다시 누르면 엑셀(.xlsx) 파일로 만들어집니다.</p>` : ""}
+      <div class="btns" style="justify-content:center">
+        ${canShare ? `<button class="btn primary" id="xShare">카카오톡 등으로 보내기</button>` : ""}
+        <button class="btn ${canShare ? "" : "primary"}" id="xSave">파일 저장</button>
+        <button class="btn" id="xClose">닫기</button>
+      </div>`);
+    $("#xClose").onclick = closeModal;
+    $("#xSave").onclick = () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+      toast("다운로드 폴더에 저장했습니다");
+    };
+    if (canShare) $("#xShare").onclick = async () => {
+      try { await navigator.share({ files: [file], title: filename }); } catch {}
+    };
+  }
+
+  // 개인전 → 순위표 · 경기 결과 · 대회 정보
+  function compSheets(c) {
+    const saved = comp;
+    comp = c;
+    try {
+      const rows = c.type === "league" ? rankLeague() : rankKnockout();
+      const R = c.type === "knockout" ? Math.log2(c.size) : 0;
+      const rank = [["순위", "선수", "부수", "경기", "승", "패", "득세트", "실세트", "세트득실률", "득점", "실점"],
+        ...rows.map(r => [r.label, r.p.name, divLabel(r.p.div), r.st.played, r.st.w, r.st.l, r.st.sw, r.st.sl, ratioText(r.st), r.st.pw, r.st.pl])];
+      const games = [["라운드", "선수1", "선수2", "세트 스코어", "세트별 점수", "승자", "입력 날짜"],
+        ...allMatches().filter(m => m.result).map(m => {
+          let a = 0, b = 0;
+          m.result.sets.forEach(([x, y]) => x > y ? a++ : b++);
+          return [c.type === "league" ? `${m.round}라운드` : roundName(m.round, R), pname(m.p1), pname(m.p2), `${a}:${b}`,
+            m.result.sets.map(s => s.join("-")).join(", "), pname(m.winner), fmtDate(m.result.at ?? c.created)];
+        })];
+      const info = [["항목", "내용"], ["대회 이름", c.name], ["대회 방식", c.type === "league" ? "리그전" : "토너먼트"],
+        ["경기 방식", BO_NAME[c.bestOf]], ["선수 수", c.players.length], ["만든 날", fmtDate(c.created)]];
+      return [{ name: "순위표", rows: rank }, { name: "경기 결과", rows: games }, { name: "대회 정보", rows: info }];
+    } finally { comp = saved; }
+  }
+
+  // 팀전 → 팀 순위 · 대전 결과 · 개인 경기 · 개인 기록 · 대회 정보
+  function teamSheets(c) {
+    const saved = tcomp;
+    tcomp = c;
+    try {
+      const head = ["구분", "순위", "팀", "대전", "승", "패", "매치 득", "매치 실", "매치득실률", "세트 득", "세트 실", "세트득실률", "득점", "실점"];
+      const line = (grp, label, id, st) => [grp, label, tName(id), st.played, st.w, st.l, st.rw, st.rl, rt(st.rw, st.rl), st.sw, st.sl, rt(st.sw, st.sl), st.pw, st.pl];
+      const rank = [head];
+      if (c.mode === "league") rankTeams(c.teams.map(t => t.id), tAllMatches()).forEach(r => rank.push(line("리그", r.label, r.id, r.st)));
+      else if (c.mode === "knockout") koRanking().forEach(r => rank.push(line("토너먼트", r.label, r.id, r.st)));
+      else {
+        c.groups.forEach(g => rankTeams(g.teams, groupMatches(g)).forEach(r => rank.push(line(`${g.name}조`, r.label, r.id, r.st))));
+        if (groupsDone()) koRanking().forEach(r => rank.push(line("최종", r.label, r.id, r.st)));
+      }
+      const all = tAllMatches().filter(m => m.state);
+      const matches = [["구분", "팀1", "팀2", "매치 스코어", "결과", "입력 날짜"],
+        ...all.map(m => [matchLabel(m), tName(m.p1), tName(m.p2), `${m.state.w[0]}:${m.state.w[1]}`,
+          m.state.done ? `${tName(m.winner)} 승` : "진행 중", fmtDate(m.result.at ?? c.created)])];
+      const labels = rubberLabels(tFmt());
+      const rubbers = [["구분", "대전", "경기", "팀1 선수", "팀2 선수", "세트별 점수", "이긴 쪽"]];
+      all.forEach(m => m.result.rubbers.forEach((r, i) => {
+        if (!r) return;
+        rubbers.push([matchLabel(m), `${tName(m.p1)} vs ${tName(m.p2)}`, labels[i], sideName(r.h), sideName(r.a),
+          r.sets.map(s => s.join("-")).join(", "), sideName(rubberWinner(r) === 0 ? r.h : r.a)]);
+      }));
+      const players = [["순위", "선수", "부수", "팀", "단식 승", "단식 패", "복식 승", "복식 패", "합계 승", "합계 패", "세트 득", "세트 실", "세트득실률", "득점", "실점"],
+        ...playerStats().map((p, k) => [k + 1, plName(p.id), divLabel(plDiv(p.id)), tName(p.team), p.sw, p.sl, p.dw, p.dl, p.sw + p.dw, p.sl + p.dl, p.setw, p.setl, rt(p.setw, p.setl), p.pw, p.pl])];
+      const info = [["항목", "내용"], ["대회 이름", c.name], ["대회 방식", `${c.teamSize ?? tFmt().size}인 ${MODE_NAME[c.mode]}`],
+        ["팀 경기 방식", tFmt().name], ["개인 경기", BO_NAME[c.bestOf]], ["팀 수", c.teams.length], ["만든 날", fmtDate(c.created)]];
+      return [{ name: "팀 순위", rows: rank }, { name: "대전 결과", rows: matches }, { name: "개인 경기", rows: rubbers },
+        { name: "개인 기록", rows: players }, { name: "대회 정보", rows: info }];
+    } finally { tcomp = saved; }
+  }
+
+  // =========================================================
+  // 대회 보관함
+  // =========================================================
+  // 새 대회를 만들거나 다른 대회로 바꿀 때 지금 대회를 여기에 저장합니다. 월별 누적 순위는 보관함과 지금 대회를 모두 합쳐 계산합니다.
+  let archive = store.get("archive", []);
+  const saveArchive = () => store.set("archive", archive);
+
+  function archiveComp(kind) {
+    const c = kind === "comp" ? comp : tcomp;
+    if (!c || !Object.keys(c.results || {}).length) return;
+    const entry = { id: `${kind}-${c.created}`, kind, name: c.name, created: c.created, archivedAt: Date.now(), data: JSON.parse(JSON.stringify(c)) };
+    archive = [entry, ...archive.filter(a => a.id !== entry.id)];
+    saveArchive();
+  }
+
+  // =========================================================
+  // 회원 명부
+  // =========================================================
+  let members = store.get("members", []);
+  let memberQuery = "";
+  const saveMembers = () => store.set("members", members);
+  const PHONE_RE = /(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})/;
+
+  function renderMembers() {
+    const root = $("#memberRoot");
+    const q = memberQuery.trim();
+    const list = members
+      .filter(mb => !q || mb.name.includes(q) || (mb.memo || "").includes(q))
+      .sort((a, b) => ((a.div ?? 99) - (b.div ?? 99)) || a.name.localeCompare(b.name, "ko"));
+    const month = monthKey(Date.now());
+    const stats = aggregate(collectGames(true).filter(g => g.month === month));
+    root.innerHTML = `
+      <h1 class="page-title">회원 <span class="ball">명부</span></h1>
+      <p class="lead">동호회 회원의 이름과 부수를 적어 두면, 대회를 만들 때 <b>명부에서 불러오기</b>로 바로 넣을 수 있습니다. 연락처와 메모는 이 휴대폰에만 저장됩니다.</p>
+      <div class="card section-card">
+        <div class="tools">
+          <input type="text" id="mSearch" placeholder="이름·메모 검색" value="${esc(memberQuery)}" aria-label="회원 검색">
+          <button class="btn primary small" id="mAdd">+ 회원 추가</button>
+          <button class="btn small" id="mBulk">여러 명 한꺼번에</button>
+          <button class="btn small" id="mExcel">📊 엑셀</button>
+        </div>
+        <p class="sub">회원 ${members.length}명${q ? ` · 검색 결과 ${list.length}명` : ""} · 이름을 누르면 고칠 수 있습니다.</p>
+        ${list.length ? `<div class="scroll-x"><table class="std">
+          <thead><tr><th style="text-align:left">이름</th><th>부수</th><th>연락처</th><th style="text-align:left">메모</th><th>${Number(month.slice(5))}월 기록</th></tr></thead>
+          <tbody>${list.map(mb => {
+            const s = stats.find(x => x.name === mb.name);
+            return `<tr class="click" data-mid="${mb.id}">
+              <td class="name"><button>${esc(mb.name)}</button></td>
+              <td>${mb.div != null ? `<span class="divtag" style="margin:0">${divLabel(mb.div)}</span>` : "-"}</td>
+              <td>${esc(mb.phone || "-")}</td>
+              <td style="text-align:left;white-space:normal;min-width:120px">${esc(mb.memo || "")}</td>
+              <td>${s ? `<span class="w">${s.w}승</span> <span class="l">${s.l}패</span>` : "-"}</td></tr>`;
+          }).join("")}</tbody></table></div>`
+        : `<div class="empty">${members.length ? "검색 결과가 없습니다." : "아직 회원이 없습니다. <b>+ 회원 추가</b>나 <b>여러 명 한꺼번에</b>로 회원을 넣어 주세요."}</div>`}
+      </div>`;
+    $("#mSearch").oninput = e => {
+      memberQuery = e.target.value;
+      const pos = e.target.selectionStart;
+      renderMembers();
+      const inp = $("#mSearch"); inp.focus(); inp.setSelectionRange(pos, pos);
+    };
+    $("#mAdd").onclick = () => openMember(null);
+    $("#mBulk").onclick = openMemberBulk;
+    $("#mExcel").onclick = () => deliverExcel(`회원명부_${fmtDate(Date.now())}`, [{ name: "회원 명부",
+      rows: [["이름", "부수", "연락처", "메모", "등록일"], ...list.map(mb => [mb.name, divLabel(mb.div), mb.phone || "", mb.memo || "", fmtDate(mb.joined || Date.now())])] }]);
+    root.querySelectorAll("[data-mid]").forEach(tr => tr.onclick = () => openMember(tr.dataset.mid));
+  }
+
+  function openMember(id) {
+    const mb = id ? members.find(x => x.id === id) : { name: "", div: null, phone: "", memo: "" };
+    openModal(`
+      <h3>${id ? "회원 정보" : "회원 추가"}</h3>
+      <div class="label">이름</div>
+      <input type="text" id="mbName" value="${esc(mb.name)}" maxlength="20">
+      <div class="label">부수</div>
+      <select id="mbDiv">${divOptions(mb.div ?? null)}</select>
+      <div class="label">연락처 (선택)</div>
+      <input type="text" id="mbPhone" value="${esc(mb.phone || "")}" inputmode="tel" maxlength="20" placeholder="010-0000-0000">
+      <div class="label">메모 (선택)</div>
+      <input type="text" id="mbMemo" value="${esc(mb.memo || "")}" maxlength="60" placeholder="예: 펜홀더, 수요일 참석">
+      <div class="error" id="mbErr"></div>
+      <div class="btns">
+        ${id ? `<button class="btn danger" id="mbDel">삭제</button>` : ""}
+        <button class="btn" id="mbCancel">취소</button>
+        <button class="btn primary" id="mbSave">저장</button>
+      </div>`);
+    $("#mbCancel").onclick = closeModal;
+    $("#mbSave").onclick = () => {
+      const name = $("#mbName").value.trim();
+      if (!name) { $("#mbErr").textContent = "이름을 적어 주세요."; return; }
+      if (members.some(x => x.id !== id && x.name === name)) { $("#mbErr").textContent = "같은 이름의 회원이 이미 있습니다. 구분할 수 있게 이름 뒤에 표시를 붙여 주세요. (예: 김민수B)"; return; }
+      const data = { name, div: readDiv($("#mbDiv").value), phone: $("#mbPhone").value.trim(), memo: $("#mbMemo").value.trim() };
+      if (id) Object.assign(mb, data);
+      else members.push({ id: "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), joined: Date.now(), ...data });
+      saveMembers(); closeModal(); renderMembers(); toast("저장했습니다");
+    };
+    if (id) $("#mbDel").onclick = async () => {
+      if (!(await ask(`${mb.name} 회원을 명부에서 지울까요? 대회 기록은 그대로 남습니다.`, { ok: "지우기", danger: true }))) return;
+      members = members.filter(x => x.id !== id);
+      saveMembers(); closeModal(); renderMembers(); toast("지웠습니다");
+    };
+  }
+
+  function openMemberBulk() {
+    openModal(`
+      <h3>여러 명 한꺼번에 추가</h3>
+      <p class="hint" style="margin-top:0">한 줄에 한 명씩 적어 주세요. 이름 뒤에 부수와 연락처를 함께 적어도 됩니다.</p>
+      <textarea id="mbText" rows="10" placeholder="홍길동 3부 010-1234-5678&#10;김철수 S급&#10;이영희 7부"></textarea>
+      <div class="error" id="mbErr"></div>
+      <div class="btns"><button class="btn" id="mbCancel">취소</button><button class="btn primary" id="mbGo">추가</button></div>`);
+    $("#mbCancel").onclick = closeModal;
+    $("#mbGo").onclick = () => {
+      let added = 0, updated = 0;
+      $("#mbText").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(line => {
+        const pm = line.match(PHONE_RE);
+        const phone = pm ? `${pm[1]}-${pm[2]}-${pm[3]}` : "";
+        const { name, div } = parseEntry(line.replace(PHONE_RE, "").trim());
+        if (!name) return;
+        const old = members.find(x => x.name === name);
+        if (old) {
+          if (div != null) old.div = div;
+          if (phone) old.phone = phone;
+          updated++;
+        } else {
+          members.push({ id: "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), joined: Date.now(), name, div, phone, memo: "" });
+          added++;
+        }
+      });
+      if (!added && !updated) { $("#mbErr").textContent = "추가할 이름이 없습니다."; return; }
+      saveMembers(); closeModal(); renderMembers();
+      toast(`${added}명 추가${updated ? `, ${updated}명 정보 갱신` : ""}`);
+    };
+  }
+
+  // 명부에서 고르기 (팀전이면 팀 이름도 받습니다)
+  function openMemberPicker(forTeam, onPick) {
+    if (!members.length) { notify("회원 명부가 비어 있습니다. 먼저 '회원' 탭에서 회원을 추가해 주세요."); return; }
+    const sorted = [...members].sort((a, b) => ((a.div ?? 99) - (b.div ?? 99)) || a.name.localeCompare(b.name, "ko"));
+    openModal(`
+      <h3>${forTeam ? "명부에서 한 팀 넣기" : "명부에서 불러오기"}</h3>
+      ${forTeam ? `<div class="label">팀 이름</div><input type="text" id="pkTeam" maxlength="20" placeholder="예: 번개">` : ""}
+      <div class="tools" style="margin:12px 0 0">
+        <input type="text" id="pkSearch" placeholder="이름 검색" aria-label="회원 검색">
+        ${forTeam ? "" : `<button class="btn small" id="pkAll">전체 선택</button>`}
+      </div>
+      <div class="pick-list">${sorted.map(mb => `<label data-name="${esc(mb.name)}"><input type="checkbox" value="${mb.id}"> <span style="flex:1">${esc(mb.name)}</span>${mb.div != null ? `<span class="divtag">${divLabel(mb.div)}</span>` : ""}</label>`).join("")}</div>
+      <div class="error" id="pkErr"></div>
+      <div class="btns"><span class="hint" id="pkCount" style="margin-right:auto">0명 선택</span><button class="btn" id="pkCancel">취소</button><button class="btn primary" id="pkGo">넣기</button></div>`);
+    const boxes = () => [...document.querySelectorAll("#modal .pick-list input")];
+    const count = () => { $("#pkCount").textContent = `${boxes().filter(b => b.checked).length}명 선택`; };
+    document.querySelector("#modal .pick-list").addEventListener("change", count);
+    $("#pkSearch").oninput = e => {
+      const q = e.target.value.trim();
+      document.querySelectorAll("#modal .pick-list label").forEach(l => l.hidden = !!q && !l.dataset.name.includes(q));
+    };
+    if (!forTeam) $("#pkAll").onclick = () => {
+      const vis = boxes().filter(b => !b.closest("label").hidden);
+      const all = vis.every(b => b.checked);
+      vis.forEach(b => b.checked = !all);
+      count();
+    };
+    $("#pkCancel").onclick = closeModal;
+    $("#pkGo").onclick = () => {
+      const picked = boxes().filter(b => b.checked).map(b => members.find(mb => mb.id === b.value));
+      if (!picked.length) { $("#pkErr").textContent = "회원을 골라 주세요."; return; }
+      if (forTeam) {
+        const tn = $("#pkTeam").value.trim();
+        if (!tn) { $("#pkErr").textContent = "팀 이름을 적어 주세요."; return; }
+        if (picked.length < 2) { $("#pkErr").textContent = "한 팀에 2명 이상 골라 주세요."; return; }
+        closeModal(); onPick(picked, tn);
+      } else { closeModal(); onPick(picked); }
+    };
+  }
+
+  // =========================================================
+  // 월별 누적 순위
+  // =========================================================
+  let recMonth = monthKey(Date.now()), recTeam = true;
+
+  // 보관함 + 지금 대회의 모든 개인 경기를 한 줄씩 모읍니다
+  function collectGames(includeTeam) {
+    const sources = [];
+    const seen = new Set();
+    const add = (kind, c) => { if (!c) return; const id = `${kind}-${c.created}`; if (seen.has(id)) return; seen.add(id); sources.push({ kind, c }); };
+    add("comp", comp); add("tcomp", tcomp);
+    archive.forEach(a => add(a.kind, a.data));
+    const games = [];
+    sources.forEach(({ kind, c }) => {
+      if (kind === "comp") {
+        const nm = id => c.players.find(p => p.id === id);
+        Object.values(c.results || {}).forEach(r => {
+          const A = nm(r.p1), B = nm(r.p2);
+          if (!A || !B || !r.sets?.length) return;
+          games.push({ month: monthKey(r.at ?? c.created), a: [A], b: [B], sets: r.sets, comp: c.name });
+        });
+      } else if (includeTeam) {
+        const pl = id => { for (const t of c.teams) { const p = t.players.find(x => x.id === id); if (p) return p; } return null; };
+        Object.values(c.results || {}).forEach(r => (r.rubbers || []).forEach(rb => {
+          if (!rb || !rb.sets?.length) return;
+          const A = rb.h.map(pl), B = rb.a.map(pl);
+          if (A.some(x => !x) || B.some(x => !x)) return;
+          games.push({ month: monthKey(r.at ?? c.created), a: A, b: B, sets: rb.sets, comp: c.name, double: A.length > 1 });
+        }));
+      }
+    });
+    return games;
+  }
+
+  // 이름별로 합치고 순위: 승수 → 세트득실률 → 총 득점
+  function aggregate(games) {
+    const S = {};
+    const get = p => S[p.name] ??= { name: p.name, div: p.div ?? null, played: 0, w: 0, l: 0, sw: 0, sl: 0, pw: 0, pl: 0, comps: new Set() };
+    games.forEach(g => {
+      let a = 0, b = 0;
+      g.sets.forEach(([x, y]) => x > y ? a++ : b++);
+      [[g.a, a > b, 0], [g.b, b > a, 1]].forEach(([ps, won, side]) => ps.forEach(p => {
+        const s = get(p);
+        if (p.div != null) s.div = p.div;
+        s.played++; won ? s.w++ : s.l++;
+        s.comps.add(g.comp);
+        g.sets.forEach(([x, y]) => {
+          const [me, op] = side === 0 ? [x, y] : [y, x];
+          me > op ? s.sw++ : s.sl++;
+          s.pw += me; s.pl += op;
+        });
+      }));
+    });
+    const rows = Object.values(S);
+    const cmp = (x, y) => (y.w - x.w) || -rc(x.sw, x.sl, y.sw, y.sl) || (y.pw - x.pw);
+    rows.sort(cmp);
+    rows.forEach((r, k) => { r.rank = k && cmp(rows[k - 1], r) === 0 ? rows[k - 1].rank : k + 1; });
+    return rows;
+  }
+
+  const rate = s => s.played ? Math.round(s.w / s.played * 100) + "%" : "-";
+
+  function monthlySheet(k, games) {
+    const rows = aggregate(k === "all" ? games : games.filter(g => g.month === k));
+    return [{ name: `${monthLabel(k)} 누적`, rows: [["순위", "선수", "부수", "경기", "승", "패", "승률", "득세트", "실세트", "세트득실률", "득점", "실점", "참가 대회 수"],
+      ...rows.map(r => [r.rank, r.name, divLabel(r.div), r.played, r.w, r.l, rate(r), r.sw, r.sl, rt(r.sw, r.sl), r.pw, r.pl, r.comps.size])] }];
+  }
+
+  function renderRecords() {
+    const root = $("#recordRoot");
+    const games = collectGames(recTeam);
+    const months = [...new Set([monthKey(Date.now()), ...games.map(g => g.month)])].sort().reverse();
+    if (recMonth !== "all" && !months.includes(recMonth)) recMonth = months[0];
+    const rows = aggregate(recMonth === "all" ? games : games.filter(g => g.month === recMonth));
+    root.innerHTML = `
+      <h1 class="page-title">기록 <span class="ball">보관함</span></h1>
+      <p class="lead">여러 대회의 경기를 모아 <b>월별 누적 순위</b>를 보여 줍니다. 새 대회를 만들면 지난 대회는 아래 보관함에 자동으로 저장됩니다.</p>
+
+      <div class="card section-card">
+        <h2>월별 누적 순위</h2>
+        <p class="sub">순위 기준: 승수 → 세트득실률 → 총 득점 · 같은 이름은 같은 선수로 합칩니다.</p>
+        <div class="tools">
+          <select id="rMonth" aria-label="달 고르기">${[...months, "all"].map(k => `<option value="${k}" ${k === recMonth ? "selected" : ""}>${monthLabel(k)}</option>`).join("")}</select>
+          <label class="chk"><input type="checkbox" id="rTeam" ${recTeam ? "checked" : ""}> 팀전 개인 경기 포함</label>
+          <button class="btn small" id="rExcel">📊 엑셀</button>
+        </div>
+        ${rows.length ? `<div class="scroll-x"><table class="std">
+          <thead><tr><th>순위</th><th style="text-align:left">선수</th><th>경기</th><th>승</th><th>패</th><th>승률</th><th>세트 득-실</th><th>세트득실률</th><th>득점</th><th>실점</th><th>대회</th></tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td class="rank ${r.rank === 1 ? "r1" : ""}">${r.rank}위</td>
+            <td class="name">${esc(r.name)}${r.div != null ? `<span class="divtag">${divLabel(r.div)}</span>` : ""}</td>
+            <td>${r.played}</td><td class="w">${r.w}</td><td class="l">${r.l}</td><td>${rate(r)}</td>
+            <td>${r.sw}-${r.sl}</td><td><b>${rt(r.sw, r.sl)}</b></td><td>${r.pw}</td><td>${r.pl}</td><td>${r.comps.size}</td></tr>`).join("")}
+          </tbody></table></div>`
+        : `<div class="empty">${monthLabel(recMonth)}에 입력된 경기가 없습니다.</div>`}
+      </div>
+
+      <div class="card section-card">
+        <h2>지난 대회</h2>
+        <p class="sub">대회 ${archive.length}개 · 엑셀로 내보내거나 다시 열 수 있습니다.</p>
+        ${archive.length ? archive.map(a => {
+          const n = Object.keys(a.data.results || {}).length;
+          return `<div class="arch">
+            <div><div class="t">${esc(a.name)}</div>
+              <div class="d">${a.kind === "comp" ? "개인전" : "팀전"} · ${fmtDate(a.created)} 시작 · 결과 ${n}건</div></div>
+            <div class="b">
+              <button class="btn small" data-ax="${a.id}">📊 엑셀</button>
+              <button class="btn small" data-ao="${a.id}">다시 열기</button>
+              <button class="btn small danger" data-ad="${a.id}">삭제</button>
+            </div></div>`;
+        }).join("") : `<div class="empty">보관된 대회가 없습니다. 개인전·팀전에서 '새 대회'를 만들면 지난 대회가 여기에 저장됩니다.</div>`}
+      </div>`;
+    $("#rMonth").onchange = e => { recMonth = e.target.value; renderRecords(); };
+    $("#rTeam").onchange = e => { recTeam = e.target.checked; renderRecords(); };
+    $("#rExcel").onclick = () => deliverExcel(`월별누적순위_${recMonth === "all" ? "전체" : recMonth}`, monthlySheet(recMonth, games));
+    root.querySelectorAll("[data-ax]").forEach(b => b.onclick = () => {
+      const a = archive.find(x => x.id === b.dataset.ax);
+      deliverExcel(a.name, a.kind === "comp" ? compSheets(a.data) : teamSheets(a.data));
+    });
+    root.querySelectorAll("[data-ao]").forEach(b => b.onclick = async () => {
+      const a = archive.find(x => x.id === b.dataset.ao);
+      if (!(await ask(`'${a.name}'을(를) 다시 열까요? 지금 ${KIND_NAME[a.kind]} 대회는 보관함에 저장됩니다.`, { ok: "다시 열기" }))) return;
+      archiveComp(a.kind);
+      leaveShare(a.kind);
+      archive = archive.filter(x => x.id !== a.id);
+      saveArchive();
+      if (a.kind === "comp") { comp = a.data; saveComp(); showTab("comp"); }
+      else { tcomp = a.data; saveT(); showTab("team"); }
+      toast("대회를 다시 열었습니다");
+    });
+    root.querySelectorAll("[data-ad]").forEach(b => b.onclick = async () => {
+      const a = archive.find(x => x.id === b.dataset.ad);
+      if (!(await ask(`'${a.name}'을(를) 보관함에서 지울까요? 월별 누적 순위에서도 빠집니다.`, { ok: "지우기", danger: true }))) return;
+      archive = archive.filter(x => x.id !== a.id);
+      saveArchive(); renderRecords(); toast("지웠습니다");
+    });
+  }
 
   // =========================================================
   // 앱 공유 (QR 코드)
