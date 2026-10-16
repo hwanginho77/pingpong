@@ -90,6 +90,16 @@
   .logo-text .ball { color: var(--ball); }
   .logo-sub { display: block; font-family: var(--body); font-size: 11px; letter-spacing: 1.5px; color: rgba(255,255,255,.7); margin-top: 3px; }
   .theme { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.8); font-size: 14px; }
+  .head-right { display: flex; align-items: center; gap: 12px; }
+  .app-share {
+    display: flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px;
+    background: var(--ball); color: #fff; border: 0; font-weight: 800; font-size: 13px;
+    box-shadow: 0 3px 10px rgba(229, 90, 0, .35);
+  }
+  .app-share svg { width: 16px; height: 16px; }
+  .app-share:hover { background: var(--ball-deep); }
+  @media (max-width: 400px) { .app-share span { display: none; } .app-share { padding: 7px; } .head-right { gap: 8px; } }
+  .qr-preview { display: block; width: 100%; max-width: 300px; margin: 0 auto 12px; border-radius: 12px; box-shadow: 0 6px 18px rgba(11, 42, 102, .25); }
   .switch { position: relative; width: 38px; height: 22px; }
   .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; }
   .switch span {
@@ -482,9 +492,15 @@
         </svg>
         <div class="logo-text">핑퐁 시합 <span class="ball">매니저</span><span class="logo-sub">점수판 · 개인전 · 팀전</span></div>
       </div>
-      <label class="theme">다크
-        <span class="switch"><input type="checkbox" id="themeToggle" aria-label="다크 모드"><span></span></span>
-      </label>
+      <div class="head-right">
+        <button class="app-share" id="appShareBtn" title="앱을 QR 코드로 다른 사람에게 보내기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2zm2 2h2v2h-2v-2zm-6 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>
+          <span>앱 공유</span>
+        </button>
+        <label class="theme">다크
+          <span class="switch"><input type="checkbox" id="themeToggle" aria-label="다크 모드"><span></span></span>
+        </label>
+      </div>
     </div>
     <nav class="tabs">
       <button data-tab="score">점수판</button>
@@ -3009,6 +3025,114 @@
 
   // 앱을 다시 열면 공유 중이던 대회에 다시 연결합니다
   Object.keys(share).forEach(kind => connect(kind));
+
+  // =========================================================
+  // 앱 공유 (QR 코드)
+  // =========================================================
+  // 앱 주소는 바뀌지 않으므로 QR 무늬(37×37, 오류 복원 H단계)를 미리 넣어 둡니다. 인터넷이 없어도 그려집니다.
+  const APP_URL = "https://hwanginho77.github.io/pingpong/";
+  const APP_QR = [
+    "1111111011111110111001110101101111111", "1000001011110111110001101111001000001", "1011101001100110100110010011001011101",
+    "1011101011010101111011000001001011101", "1011101011011110110001010111001011101", "1000001010011110010001111111101000001",
+    "1111111010101010101010101010101111111", "0000000001001111010011110010000000000", "0001001000100000010110101001100111011",
+    "1110110110011010011000000011111000001", "1001111011111011110101011001001101111", "0101110000000000000100011100100000010",
+    "1000011011011100100001010101111001000", "0000100110000000011000011000001101011", "1000101010001111011110000110000100101",
+    "1100110101110010001100101111011000000", "0101011010111000101011001011111101101", "1110110000100010011010110010001010101",
+    "0000101010011010011110000100001110011", "1011110110111000001101011010011010101", "0100111011001001001101111111111110001",
+    "0000110110110011110000010010011000011", "0010101101100101111010011000011110011", "1011100001011110000100100010011010001",
+    "0100001101000001011000011001101000010", "0011000110000010001000111101111101111", "1001011011100010000001001000011110101",
+    "0101010010101000011010101100101010001", "1101101010010101010011011001111110111", "0000000011100010110010111001100010001",
+    "1111111001111000010100000101101010111", "1000001001100011010111010000100010101", "1011101000011110100100100110111111001",
+    "1011101011001111110000110101110010011", "1011101001010001011111100111110011101", "1000001000000001111110100111101110000",
+    "1111111001110001110011101101101000011",
+  ];
+
+  // 탁구대 파랑 바탕에 QR과 설치 안내를 그린 그림
+  function drawAppQr() {
+    const W = 900, H = 1200, c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    const bg = g.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#0b2a66"); bg.addColorStop(1, "#1652b8");
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(W / 2 - 2, 0, 4, H);
+    g.fillStyle = "#fff"; g.fillRect(0, H - 14, W, 14);
+    const body = '"Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+    g.font = `64px "Black Han Sans", ${body}`;
+    const t1 = "핑퐁 시합 ", t2 = "매니저", w1 = g.measureText(t1).width, w2 = g.measureText(t2).width;
+    g.textAlign = "left"; g.fillStyle = "#fff"; g.fillText(t1, W / 2 - (w1 + w2) / 2, 140);
+    g.fillStyle = "#ff7a1a"; g.fillText(t2, W / 2 - (w1 + w2) / 2 + w1, 140);
+    g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,.8)"; g.font = `28px ${body}`;
+    g.fillText("탁구 점수판 · 개인전 · 팀전 · 실시간 공유", W / 2, 195);
+    const card = 640, cx = (W - card) / 2, cy = 245, n = APP_QR.length;
+    g.fillStyle = "#fff";
+    g.beginPath();
+    if (g.roundRect) g.roundRect(cx, cy, card, card, 36); else g.rect(cx, cy, card, card);
+    g.fill();
+    const cell = Math.floor((card - 96) / n), size = cell * n, ox = cx + (card - size) / 2, oy = cy + (card - size) / 2;
+    g.fillStyle = "#0b2a66";
+    APP_QR.forEach((row, r) => [...row].forEach((v, k) => { if (v === "1") g.fillRect(ox + k * cell, oy + r * cell, cell, cell); }));
+    const mx = W / 2, my = cy + card / 2;
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(mx, my, 62, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#e0302b"; g.beginPath(); g.ellipse(mx - 4, my + 2, 40, 42, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#ff7a1a"; g.beginPath(); g.arc(mx + 34, my - 34, 15, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = 4; g.stroke();
+    g.fillStyle = "#fff"; g.font = `bold 40px ${body}`;
+    g.fillText("휴대폰 카메라로 찍어 보세요", W / 2, cy + card + 85);
+    g.fillStyle = "rgba(255,255,255,.85)"; g.font = `27px ${body}`;
+    g.fillText("열린 화면에서 ⋮ → 앱 설치 (아이폰: 공유 → 홈 화면에 추가)", W / 2, cy + card + 140);
+    g.fillStyle = "#ffb27a"; g.font = "26px Consolas, monospace";
+    g.fillText(APP_URL, W / 2, cy + card + 195);
+    return c;
+  }
+
+  const SHARE_TEXT = `🏓 핑퐁 시합 매니저 (탁구 점수판·대회 기록 앱)\n${APP_URL}\n\n[설치] 갤럭시: 크롬으로 열기 → ⋮ → 앱 설치\n아이폰: 사파리로 열기 → 공유(□↑) → 홈 화면에 추가`;
+
+  async function openAppShare() {
+    try { await document.fonts?.load('64px "Black Han Sans"'); } catch {}
+    const canvas = drawAppQr();
+    const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+    const file = blob ? new File([blob], "핑퐁매니저_QR.png", { type: "image/png" }) : null;
+    const canShareFile = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+    openModal(`
+      <h3>앱 공유하기</h3>
+      <img class="qr-preview" id="qrImg" alt="핑퐁 시합 매니저 설치 QR 코드" src="${canvas.toDataURL("image/png")}">
+      <p class="hint center" style="margin-top:0">상대방이 이 화면을 휴대폰 카메라로 찍으면 바로 설치 화면이 열립니다.</p>
+      <div class="error" id="qsMsg"></div>
+      <div class="btns" style="justify-content:center">
+        ${canShareFile ? `<button class="btn primary" id="qsShare">QR 이미지 보내기</button>` : ""}
+        <button class="btn" id="qsSave">이미지 저장</button>
+        <button class="btn" id="qsLink">링크 보내기</button>
+        <button class="btn" id="qsClose">닫기</button>
+      </div>
+      <p class="hint center">${canShareFile
+        ? "'QR 이미지 보내기'를 누르면 카카오톡·문자 등을 골라 바로 보낼 수 있습니다."
+        : "'이미지 저장'으로 저장한 사진을 카카오톡에서 보내 주세요. 'QR 이미지 보내기'는 휴대폰 앱에서 나타납니다."}</p>`);
+    $("#qsClose").onclick = closeModal;
+    if (canShareFile) $("#qsShare").onclick = async () => {
+      try { await navigator.share({ files: [file], title: "핑퐁 시합 매니저", text: SHARE_TEXT }); }
+      catch (e) { if (e?.name !== "AbortError") $("#qsMsg").textContent = "보내기 창을 열지 못했습니다. '이미지 저장'으로 저장한 뒤 보내 주세요."; }
+    };
+    $("#qsSave").onclick = () => {
+      if (!blob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "핑퐁매니저_QR.png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      $("#qsMsg").textContent = "";
+      toast("사진(다운로드)에 저장했습니다");
+    };
+    $("#qsLink").onclick = async () => {
+      if (navigator.share) {
+        try { await navigator.share({ title: "핑퐁 시합 매니저", text: SHARE_TEXT }); return; }
+        catch (e) { if (e?.name === "AbortError") return; }
+      }
+      try { await navigator.clipboard.writeText(SHARE_TEXT); toast("앱 주소와 설치 방법을 복사했습니다"); }
+      catch { $("#qsMsg").textContent = APP_URL; }
+    };
+  }
+  $("#appShareBtn").addEventListener("click", openAppShare);
 
   // =========================================================
   // 시작

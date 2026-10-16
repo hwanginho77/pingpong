@@ -1,6 +1,6 @@
 // 앱 파일을 휴대폰에 저장해 두고, 인터넷이 없을 때도 열리게 합니다.
 // 앱을 고친 뒤 다시 올릴 때는 아래 버전 숫자를 하나 올려 주세요.
-const CACHE = "pingpong-v9";
+const CACHE = "pingpong-v10";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
