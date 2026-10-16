@@ -1776,9 +1776,12 @@
 
   // ---------- 백업 ----------
   // 휴대폰 앱에서는 파일 내려받기가 막혀 있을 수 있어서, 백업을 글자(코드)로도 복사할 수 있게 합니다
+  // kind: "comp" | "tcomp" | "all"(개인전·팀전·회원 명부·보관함 모두)
   function openExport(kind = "comp") {
-    const obj = kind === "tcomp" ? tcomp : comp;
-    const text = JSON.stringify({ app: "pingpong", version: 1, [kind]: obj });
+    const obj = kind === "all" ? { name: `핑퐁매니저_전체백업_${fmtDate(Date.now())}` } : kind === "tcomp" ? tcomp : comp;
+    const text = kind === "all"
+      ? JSON.stringify({ app: "pingpong", version: 2, comp, tcomp, members, archive })
+      : JSON.stringify({ app: "pingpong", version: 1, [kind]: obj });
     openModal(`
       <h3>백업 저장</h3>
       <p class="hint" style="margin-top:0">아래 백업 코드를 복사해서 카카오톡 나에게 보내기나 메모장에 붙여 두세요. 나중에 '백업 불러오기'에 붙여 넣으면 그대로 돌아옵니다.</p>
@@ -1821,17 +1824,41 @@
   // 개인전 백업과 팀전 백업을 알아서 구분해 불러옵니다
   async function importText(text) {
     let c, t;
+    let mem = null, arc = null;
     try {
       const data = JSON.parse(text);
       c = data.comp; t = data.tcomp;
+      mem = Array.isArray(data.members) ? data.members : null;
+      arc = Array.isArray(data.archive) ? data.archive : null;
       const okC = c && Array.isArray(c.players) && c.results && ["league", "knockout"].includes(c.type);
       const okT = t && Array.isArray(t.teams) && t.results && TEAM_FORMATS[t.format] && MODE_NAME[t.mode];
-      if (!okC && !okT) throw new Error();
+      if (!okC && !okT && !mem && !arc) throw new Error();
       if (!okC) c = null;
       if (!okT) t = null;
     } catch {
       const err = $("#imErr");
       if (err) err.textContent = "백업 코드가 올바르지 않습니다. 처음부터 끝까지 빠짐없이 붙여 넣었는지 확인해 주세요.";
+      return;
+    }
+    // 전체 백업: 회원 명부와 보관함은 합치고, 개인전·팀전은 백업의 대회로 바꿉니다
+    if (mem || arc) {
+      const parts = [mem && `회원 ${mem.length}명`, arc && `보관 대회 ${arc.length}개`, c && `개인전 '${c.name}'`, t && `팀전 '${t.name}'`].filter(Boolean).join(", ");
+      if (!(await ask(`전체 백업(${parts})을 불러옵니다. 회원 명부와 보관함은 이 휴대폰 것과 합치고, 개인전·팀전이 들어 있으면 그 대회로 바꿉니다(지금 대회는 보관함에 저장). 계속할까요?`, { ok: "불러오기" }))) return;
+      let addM = 0, addA = 0;
+      (mem || []).forEach(mb => {
+        if (!mb?.name) return;
+        const old = members.find(x => x.name === mb.name);
+        if (old) { old.div = mb.div ?? old.div; old.phone = old.phone || mb.phone || ""; old.memo = old.memo || mb.memo || ""; }
+        else { members.push({ id: mb.id || "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), joined: mb.joined || Date.now(), name: mb.name, div: mb.div ?? null, phone: mb.phone || "", memo: mb.memo || "" }); addM++; }
+      });
+      (arc || []).forEach(a => { if (a?.id && a.data && !archive.some(x => x.id === a.id)) { archive.push(a); addA++; } });
+      archive.sort((x, y) => (y.archivedAt || 0) - (x.archivedAt || 0));
+      saveMembers(); saveArchive();
+      if (c && c.created !== comp?.created) { archiveComp("comp"); leaveShare("comp"); comp = c; saveComp(); }
+      if (t && t.created !== tcomp?.created) { archiveComp("tcomp"); leaveShare("tcomp"); tcomp = t; saveT(); }
+      closeModal();
+      showTab(currentTab);
+      toast(`불러왔습니다 · 회원 ${addM}명, 보관 대회 ${addA}개 추가`);
       return;
     }
     if (t) {
@@ -2796,7 +2823,8 @@
   // 경기마다 따로 저장해서, 여러 사람이 다른 경기를 동시에 입력해도 서로 덮어쓰지 않습니다.
   const SHARE_DB_URL = "https://pingpong-c4cfa-default-rtdb.asia-southeast1.firebasedatabase.app";
   const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const KIND_NAME = { comp: "개인전", tcomp: "팀전" };
+  // club = 동호회 명부·보관함: shared/<코드> = { meta, members: { 회원ID: 글자 }, archive: { 대회ID: 글자 } }
+  const KIND_NAME = { comp: "개인전", tcomp: "팀전", club: "동호회 명부·기록" };
 
   let share = store.get("share", {});        // { comp: { code }, tcomp: { code } }
   let pending = store.get("sharePending", {}); // 아직 못 보낸 변경 { comp: { 경로: 값 } }
@@ -2840,12 +2868,58 @@
     return root;
   }
 
-  // 서버 사본 + 아직 못 보낸 내 변경 → 화면에 쓸 대회
+  // 서버에 올리는 모양을 "경로 → 글자" 목록으로 펼칩니다 (바뀐 경로만 골라 보내려고)
+  function flatLocal(kind) {
+    const out = {};
+    if (kind === "club") {
+      const withContacts = !!mirror.club?.meta?.contacts;
+      members.forEach(mb => {
+        const o = { name: mb.name, div: mb.div ?? null, joined: mb.joined ?? null };
+        if (withContacts) { o.phone = mb.phone || ""; o.memo = mb.memo || ""; }
+        out["members/" + mb.id] = JSON.stringify(o);
+      });
+      archive.forEach(a => out["archive/" + a.id] = JSON.stringify(a));
+      return out;
+    }
+    const obj = getObj(kind);
+    if (!obj) return null;
+    const { data, results } = splitObj(obj);
+    out.data = data;
+    Object.entries(results).forEach(([id, s]) => out["results/" + id] = s);
+    return out;
+  }
+  function flatRemote(kind) {
+    const m = mirror[kind] || {}, out = {};
+    const put = (prefix, obj) => Object.entries(obj || {}).forEach(([id, s]) => out[`${prefix}/${id}`] = s);
+    if (kind === "club") { put("members", m.members); put("archive", m.archive); }
+    else { if (m.data !== undefined) out.data = m.data; put("results", m.results); }
+    return out;
+  }
+
+  // 서버 사본 + 아직 못 보낸 내 변경 → 화면에 쓸 대회(또는 명부·보관함)
   function rebuild(kind) {
     const m = mirror[kind];
-    if (!m || !m.data) return;
-    let view = { data: m.data, results: { ...(m.results || {}) } };
-    Object.entries(pending[kind] || {}).forEach(([p, v]) => { if (p !== "meta/updated") view = applyAt(view, p, v); });
+    if (!m) return;
+    let view = JSON.parse(JSON.stringify({ data: m.data, results: m.results || {}, members: m.members || {}, archive: m.archive || {} }));
+    Object.entries(pending[kind] || {}).forEach(([p, v]) => { if (!p.startsWith("meta/")) view = applyAt(view, p, v); });
+    if (kind === "club") {
+      // 연락처·메모를 공유하지 않는 동호회라면 이 휴대폰에 적어 둔 것을 그대로 둡니다
+      const mine = new Map(members.map(x => [x.id, x]));
+      members = Object.entries(view.members || {}).map(([id, s]) => {
+        try {
+          const o = JSON.parse(s), p = mine.get(id);
+          return { id, name: o.name, div: o.div ?? null, joined: o.joined ?? Date.now(), phone: o.phone ?? p?.phone ?? "", memo: o.memo ?? p?.memo ?? "" };
+        } catch { return null; }
+      }).filter(Boolean);
+      archive = Object.values(view.archive || {}).map(s => { try { return JSON.parse(s); } catch { return null; } })
+        .filter(Boolean).sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+      store.set("members", members);
+      store.set("archive", archive);
+      if (currentTab === "members") renderMembers();
+      if (currentTab === "records") renderRecords();
+      return;
+    }
+    if (!view.data) return;
     let obj;
     try {
       obj = JSON.parse(view.data);
@@ -2890,14 +2964,12 @@
     pushTimers[kind] = setTimeout(() => pushDiff(kind), 250);
   }
   function pushDiff(kind) {
-    const obj = getObj(kind);
-    if (!obj || !mirror[kind]) return;
-    const local = splitObj(obj), remote = mirror[kind];
+    const local = flatLocal(kind);
+    if (!local || !mirror[kind]) return;
+    const remote = flatRemote(kind);
     const ops = {};
-    if (local.data !== remote.data) ops.data = local.data;
-    const rr = remote.results || {};
-    Object.entries(local.results).forEach(([id, s]) => { if (rr[id] !== s) ops["results/" + id] = s; });
-    Object.keys(rr).forEach(id => { if (!(id in local.results)) ops["results/" + id] = null; });
+    Object.entries(local).forEach(([p, s]) => { if (remote[p] !== s) ops[p] = s; });
+    Object.keys(remote).forEach(p => { if (!(p in local)) ops[p] = null; });
     // 이미 보내려고 모아 둔 변경 중 지금과 다른 것은 새 값으로 바뀝니다
     const pend = { ...(pending[kind] || {}) };
     Object.keys(pend).forEach(p => { if (!(p in ops) && p !== "meta/updated") delete pend[p]; });
@@ -2948,17 +3020,26 @@
     return [...a].map(n => CODE_CHARS[n % CODE_CHARS.length]).join("");
   }
 
-  async function startShare(kind) {
-    const obj = getObj(kind);
-    if (!obj) return;
+  // opts(동호회일 때) = { name, contacts: 연락처·메모도 공유할지 }
+  async function startShare(kind, opts = {}) {
     const code = newCode();
-    const parts = splitObj(obj);
-    const body = { meta: { kind, name: obj.name, created: { ".sv": "timestamp" } }, ...parts };
-    const r = await fetch(shareUrl(code), { method: "PUT", body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(r.status);
+    let meta, body;
+    if (kind === "club") {
+      meta = { kind, name: opts.name || "우리 동호회", contacts: !!opts.contacts };
+      mirror.club = { meta };
+      body = { meta };
+      Object.entries(flatLocal("club")).forEach(([p, s]) => body = applyAt(body, p, s));
+    } else {
+      const obj = getObj(kind);
+      if (!obj) return;
+      meta = { kind, name: obj.name };
+      body = { meta, ...splitObj(obj) };
+    }
+    const r = await fetch(shareUrl(code), { method: "PUT", body: JSON.stringify({ ...body, meta: { ...meta, created: { ".sv": "timestamp" } } }) });
+    if (!r.ok) { if (kind === "club") delete mirror.club; throw new Error(r.status); }
     share[kind] = { code };
     pending[kind] = {};
-    mirror[kind] = { meta: { kind, name: obj.name }, ...parts };
+    mirror[kind] = JSON.parse(JSON.stringify(body));
     saveShare();
     connect(kind);
     return code;
@@ -2968,8 +3049,25 @@
     const r = await fetch(shareUrl(code));
     if (!r.ok) throw new Error("network");
     const data = await r.json();
-    if (!data || !data.data || !KIND_NAME[data.meta?.kind]) return null;
-    const kind = data.meta.kind;
+    const kind = data?.meta?.kind;
+    if (!KIND_NAME[kind] || (kind !== "club" && !data.data)) return null;
+    if (kind === "club") {
+      // 이 휴대폰에 있던 회원·보관 대회는 동호회 명부에 합칩니다
+      const myMembers = members, myArchive = archive;
+      if ((myMembers.length || myArchive.length) && share.club?.code !== code &&
+        !(await ask(`동호회 '${data.meta.name || code}'에 참가합니다. 이 휴대폰의 회원 ${myMembers.length}명과 보관 대회 ${myArchive.length}개는 동호회 명부에 합쳐집니다. 계속할까요?`, { ok: "합치고 참가" }))) return "cancel";
+      leaveShare("club");
+      share.club = { code };
+      mirror.club = data;
+      saveShare();
+      rebuild("club");
+      myMembers.forEach(mb => { if (!members.some(x => x.name === mb.name)) members.push(mb); });
+      myArchive.forEach(a => { if (!archive.some(x => x.id === a.id)) archive.push(a); });
+      saveMembers();
+      saveArchive();
+      connect("club");
+      return kind;
+    }
     if (getObj(kind) && share[kind]?.code !== code &&
       !(await ask(`이 휴대폰의 ${KIND_NAME[kind]} 화면이 공유 대회 '${data.meta.name || code}'로 바뀝니다. 지금 대회는 '기록' 탭 보관함에 저장됩니다. 계속할까요?`, { ok: "참가하기" }))) return "cancel";
     if (share[kind]?.code !== code) archiveComp(kind);
@@ -2994,10 +3092,40 @@
     if (btn) btn.onclick = () => openShare(kind);
   }
 
+  function rerenderFor(kind) {
+    if (kind === "comp") renderComp();
+    else if (kind === "tcomp") renderTeam();
+    else if (currentTab === "records") renderRecords();
+    else renderMembers();
+  }
+
   function openShare(kind) {
     const sh = share[kind];
     if (!SHARE_DB_URL) {
       notify("이 화면에서는 실시간 공유를 쓸 수 없습니다. https://hwanginho77.github.io/pingpong/ 에서 설치한 앱으로 써 주세요.");
+      return;
+    }
+    if (!sh && kind === "club") {
+      openModal(`
+        <h3>동호회 공유 시작</h3>
+        <p style="margin-top:0"><b>회원 명부</b>와 <b>기록 보관함</b>(지난 대회·월별 누적 순위)을 인터넷에 올리고 <b>동호회 코드</b>를 만듭니다. 코드를 받은 운영진은 <b>회원</b> 탭 → <b>동호회 코드로 참가</b>로 함께 고칠 수 있습니다.</p>
+        <div class="label">동호회 이름</div>
+        <input type="text" id="clName" maxlength="30" value="우리 동호회">
+        <label class="rest-toggle" style="margin-top:14px"><input type="checkbox" id="clContacts"> 연락처와 메모도 함께 공유</label>
+        <p class="hint">끄면 이름과 부수만 공유되고, 연락처·메모는 각자 휴대폰에만 남습니다. 코드를 아는 사람은 누구나 명부를 볼 수 있으니 운영진에게만 알려 주세요.</p>
+        <div class="error" id="shErr"></div>
+        <div class="btns"><button class="btn" id="shCancel">취소</button><button class="btn primary" id="shGo">공유 시작</button></div>`);
+      $("#shCancel").onclick = closeModal;
+      $("#shGo").onclick = async () => {
+        $("#shGo").disabled = true;
+        try {
+          await startShare("club", { name: $("#clName").value.trim(), contacts: $("#clContacts").checked });
+          closeModal(); rerenderFor("club"); openShare("club");
+        } catch {
+          $("#shErr").textContent = "공유를 시작하지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.";
+          $("#shGo").disabled = false;
+        }
+      };
       return;
     }
     if (!sh) {
@@ -3023,11 +3151,14 @@
       return;
     }
     const nPend = Object.keys(pending[kind] || {}).filter(p => p !== "meta/updated").length;
+    const isClub = kind === "club";
     openModal(`
-      <h3>실시간 공유 중</h3>
-      <p style="margin:0 0 6px">대회 코드</p>
+      <h3>${isClub ? `동호회 공유 중 · ${esc(mirror.club?.meta?.name || "")}` : "실시간 공유 중"}</h3>
+      <p style="margin:0 0 6px">${isClub ? "동호회 코드" : "대회 코드"}</p>
       <div class="code-big" id="shCode">${sh.code}</div>
-      <p class="hint center">다른 사람은 앱의 <b>${KIND_NAME[kind]}</b> 탭 → <b>대회 코드로 참가</b>에 이 코드를 넣으면 됩니다.</p>
+      <p class="hint center">${isClub
+        ? `다른 운영진은 앱의 <b>회원</b> 탭 → <b>동호회 코드로 참가</b>에 이 코드를 넣으면 됩니다. ${mirror.club?.meta?.contacts ? "연락처·메모도 함께 공유됩니다." : "이름과 부수만 공유되고 연락처·메모는 각자 휴대폰에 남습니다."}`
+        : `다른 사람은 앱의 <b>${KIND_NAME[kind]}</b> 탭 → <b>대회 코드로 참가</b>에 이 코드를 넣으면 됩니다.`}</p>
       <p class="center" style="margin:12px 0 0"><span class="share-chip ${shareStatus[kind] || "connecting"}" data-chip="${kind}"><i></i><span class="t">${STATUS_TEXT[shareStatus[kind] || "connecting"]}</span></span></p>
       ${nPend ? `<p class="hint center">아직 보내지 못한 변경 ${nPend}건 · 인터넷이 연결되면 자동으로 보냅니다.</p>` : ""}
       <div class="btns">
@@ -3037,7 +3168,7 @@
       </div>`);
     $("#shClose").onclick = closeModal;
     $("#shCopy").onclick = async () => {
-      const text = `핑퐁 시합 매니저 ${KIND_NAME[kind]} 대회 코드: ${sh.code}\n앱: https://hwanginho77.github.io/pingpong/`;
+      const text = `핑퐁 시합 매니저 ${KIND_NAME[kind]} ${isClub ? "동호회" : "대회"} 코드: ${sh.code}\n앱: https://hwanginho77.github.io/pingpong/`;
       try { await navigator.clipboard.writeText(text); toast("복사했습니다"); }
       catch { toast("코드를 길게 눌러 복사하세요"); }
     };
@@ -3045,16 +3176,16 @@
       if (!(await ask("이 휴대폰만 공유에서 빠집니다. 지금까지의 기록은 이 휴대폰에 남고, 다른 사람들의 공유는 계속됩니다. 끊을까요?", { ok: "공유 끊기", danger: true }))) return;
       leaveShare(kind);
       closeModal();
-      kind === "comp" ? renderComp() : renderTeam();
+      rerenderFor(kind);
       toast("공유를 끊었습니다");
     };
   }
 
-  function openJoin() {
+  function openJoin(forClub = false) {
     if (!SHARE_DB_URL) { notify("이 화면에서는 실시간 공유를 쓸 수 없습니다. https://hwanginho77.github.io/pingpong/ 에서 설치한 앱으로 써 주세요."); return; }
     openModal(`
-      <h3>대회 코드로 참가</h3>
-      <p class="hint" style="margin-top:0">대회를 공유한 사람에게 받은 8자리 코드를 넣어 주세요.</p>
+      <h3>${forClub === true ? "동호회 코드로 참가" : "대회 코드로 참가"}</h3>
+      <p class="hint" style="margin-top:0">공유한 사람에게 받은 8자리 코드를 넣어 주세요. 대회 코드와 동호회 코드 모두 됩니다.</p>
       <input type="text" id="jnCode" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="예: K7M2Q9XA" style="text-transform:uppercase;font-size:22px;font-weight:800;letter-spacing:4px;text-align:center">
       <div class="error" id="jnErr"></div>
       <div class="btns"><button class="btn" id="jnCancel">취소</button><button class="btn primary" id="jnGo">참가하기</button></div>`);
@@ -3068,8 +3199,8 @@
         if (kind === "cancel") { $("#jnGo").disabled = false; return; }
         if (!kind) { $("#jnErr").textContent = "이 코드의 대회를 찾을 수 없습니다. 코드를 다시 확인해 주세요."; $("#jnGo").disabled = false; return; }
         closeModal();
-        showTab(kind === "comp" ? "comp" : "team");
-        toast("공유 대회에 참가했습니다");
+        showTab(kind === "comp" ? "comp" : kind === "tcomp" ? "team" : "members");
+        toast(kind === "club" ? "동호회 명부에 참가했습니다" : "공유 대회에 참가했습니다");
       } catch {
         $("#jnErr").textContent = "연결하지 못했습니다. 인터넷 연결을 확인해 주세요.";
         $("#jnGo").disabled = false;
@@ -3209,7 +3340,7 @@
   // =========================================================
   // 새 대회를 만들거나 다른 대회로 바꿀 때 지금 대회를 여기에 저장합니다. 월별 누적 순위는 보관함과 지금 대회를 모두 합쳐 계산합니다.
   let archive = store.get("archive", []);
-  const saveArchive = () => store.set("archive", archive);
+  const saveArchive = () => { store.set("archive", archive); queuePush("club"); };
 
   function archiveComp(kind) {
     const c = kind === "comp" ? comp : tcomp;
@@ -3224,7 +3355,37 @@
   // =========================================================
   let members = store.get("members", []);
   let memberQuery = "";
-  const saveMembers = () => store.set("members", members);
+  const saveMembers = () => { store.set("members", members); queuePush("club"); };
+
+  // 회원·기록 탭 위쪽: 여러 휴대폰에서 함께 쓰기 + 전체 백업
+  function clubCardHtml() {
+    const sh = share.club;
+    const st = shareStatus.club || "connecting";
+    return `<div class="card section-card">
+      <h2>여러 휴대폰에서 함께 쓰기 · 백업</h2>
+      ${sh
+        ? `<p class="sub">동호회 <b>${esc(mirror.club?.meta?.name || "")}</b>의 회원 명부와 기록 보관함을 함께 쓰고 있습니다.</p>
+           <div class="tools">
+             <button class="share-chip ${st}" data-chip="club" id="clubInfo"><i></i><span class="t">${STATUS_TEXT[st]}</span><b>${sh.code}</b></button>
+             <button class="btn small" id="allBackup">전체 백업 저장</button>
+             <button class="btn small" id="allImport">백업 불러오기</button>
+           </div>`
+        : `<p class="sub">동호회 코드를 만들면 운영진 휴대폰끼리 <b>회원 명부와 기록 보관함</b>을 실시간으로 함께 씁니다. 전체 백업에는 개인전·팀전·회원 명부·보관함이 모두 들어갑니다.</p>
+           <div class="tools">
+             <button class="btn primary small" id="clubStart">📡 동호회 공유 시작</button>
+             <button class="btn small" id="clubJoin">동호회 코드로 참가</button>
+             <button class="btn small" id="allBackup">전체 백업 저장</button>
+             <button class="btn small" id="allImport">백업 불러오기</button>
+           </div>`}
+    </div>`;
+  }
+  function bindClubCard() {
+    $("#clubInfo") && ($("#clubInfo").onclick = () => openShare("club"));
+    $("#clubStart") && ($("#clubStart").onclick = () => openShare("club"));
+    $("#clubJoin") && ($("#clubJoin").onclick = () => openJoin(true));
+    $("#allBackup").onclick = () => openExport("all");
+    $("#allImport").onclick = openImport;
+  }
   const PHONE_RE = /(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})/;
 
   function renderMembers() {
@@ -3237,7 +3398,8 @@
     const stats = aggregate(collectGames(true).filter(g => g.month === month));
     root.innerHTML = `
       <h1 class="page-title">회원 <span class="ball">명부</span></h1>
-      <p class="lead">동호회 회원의 이름과 부수를 적어 두면, 대회를 만들 때 <b>명부에서 불러오기</b>로 바로 넣을 수 있습니다. 연락처와 메모는 이 휴대폰에만 저장됩니다.</p>
+      <p class="lead">동호회 회원의 이름과 부수를 적어 두면, 대회를 만들 때 <b>명부에서 불러오기</b>로 바로 넣을 수 있습니다.</p>
+      ${clubCardHtml()}
       <div class="card section-card">
         <div class="tools">
           <input type="text" id="mSearch" placeholder="이름·메모 검색" value="${esc(memberQuery)}" aria-label="회원 검색">
@@ -3265,6 +3427,7 @@
       renderMembers();
       const inp = $("#mSearch"); inp.focus(); inp.setSelectionRange(pos, pos);
     };
+    bindClubCard();
     $("#mAdd").onclick = () => openMember(null);
     $("#mBulk").onclick = openMemberBulk;
     $("#mExcel").onclick = () => deliverExcel(`회원명부_${fmtDate(Date.now())}`, [{ name: "회원 명부",
@@ -3455,6 +3618,7 @@
     root.innerHTML = `
       <h1 class="page-title">기록 <span class="ball">보관함</span></h1>
       <p class="lead">여러 대회의 경기를 모아 <b>월별 누적 순위</b>를 보여 줍니다. 새 대회를 만들면 지난 대회는 아래 보관함에 자동으로 저장됩니다.</p>
+      ${clubCardHtml()}
 
       <div class="card section-card">
         <h2>월별 누적 순위</h2>
@@ -3490,6 +3654,7 @@
             </div></div>`;
         }).join("") : `<div class="empty">보관된 대회가 없습니다. 개인전·팀전에서 '새 대회'를 만들면 지난 대회가 여기에 저장됩니다.</div>`}
       </div>`;
+    bindClubCard();
     $("#rMonth").onchange = e => { recMonth = e.target.value; renderRecords(); };
     $("#rTeam").onchange = e => { recTeam = e.target.checked; renderRecords(); };
     $("#rExcel").onclick = () => deliverExcel(`월별누적순위_${recMonth === "all" ? "전체" : recMonth}`, monthlySheet(recMonth, games));
