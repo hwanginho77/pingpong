@@ -98,7 +98,16 @@
   }
   .app-share svg { width: 16px; height: 16px; }
   .app-share:hover { background: var(--ball-deep); }
-  @media (max-width: 400px) { .app-share span { display: none; } .app-share { padding: 7px; } .head-right { gap: 8px; } }
+  .app-link {
+    margin-left: auto; align-self: center; flex: none;
+    display: flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px;
+    background: rgba(255,255,255,.16); color: #fff; font-weight: 800; font-size: 13px; text-decoration: none;
+    border: 1px solid rgba(255,255,255,.35);
+  }
+  .app-link svg { width: 16px; height: 16px; }
+  .app-link:hover { background: rgba(255,255,255,.26); }
+  @media (max-width: 400px) { .app-share span { display: none; } .app-share { padding: 7px; } .head-right { gap: 8px; } .app-link { padding: 6px; } .app-link span { display: none; } }
+  nav.tabs button { white-space: nowrap; }
   .qr-preview { display: block; width: 100%; max-width: 300px; margin: 0 auto 12px; border-radius: 12px; box-shadow: 0 6px 18px rgba(11, 42, 102, .25); }
   .switch { position: relative; width: 38px; height: 22px; }
   .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; }
@@ -526,6 +535,10 @@
       <button data-tab="team">팀전</button>
       <button data-tab="members">회원</button>
       <button data-tab="records">기록</button>
+      <a class="app-link" href="webtoon/" title="웹툰 자동 스크롤 앱 열기" aria-label="웹툰 자동 스크롤 앱">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="4.5" rx="1.2" fill="#ffd65a"/><rect x="5" y="8" width="14" height="4.5" rx="1.2" fill="#ff7a8c"/><rect x="5" y="14" width="14" height="4.5" rx="1.2" fill="#78c8ff"/><path d="M9 19.5h6l-3 3.5z" fill="#fff"/></svg>
+        <span>웹툰</span>
+      </a>
     </nav>
   </div>
 </header>
