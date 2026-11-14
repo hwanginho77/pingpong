@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>웹툰 자동 스크롤</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#171326">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="툰스크롤">
+<style>
+  :root {
+    --bg: #f6f3fb;
+    --surface: #ffffff;
+    --surface2: #eee9f7;
+    --border: #ddd5ec;
+    --text: #1d1830;
+    --muted: #6b6382;
+    --accent: #ff5a7a;
+    --accent-deep: #e23d5f;
+    --on-accent: #ffffff;
+    --yellow: #ffd65a;
+    --sky: #78c8ff;
+    --reader-bg: #0e0c16;
+    --bar: rgba(23, 19, 38, .92);
+    --bar-text: #f4f0ff;
+    --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --bg: #171326; --surface: #221c37; --surface2: #2c2546; --border: #3a3158;
+    --text: #f4f0ff; --muted: #a79fc2; --accent: #ff6f8c; --accent-deep: #ff4f73;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171326; --surface: #221c37; --surface2: #2c2546; --border: #3a3158;
+      --text: #f4f0ff; --muted: #a79fc2; --accent: #ff6f8c; --accent-deep: #ff4f73;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--font); font-size: 15px; line-height: 1.55;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- 홈 ---------- */
+  #home { max-width: 640px; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) 16px 48px; }
+  header.top { display: flex; align-items: center; gap: 12px; margin: 8px 0 20px; }
+  header.top img { width: 48px; height: 48px; border-radius: 12px; }
+  header.top h1 { font-size: 22px; margin: 0; letter-spacing: -.02em; }
+  header.top p { margin: 0; color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 17px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .num {
+    display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent); font-size: 13px;
+  }
+  .card > p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    flex: 1 1 140px; min-height: 48px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface2); font-weight: 600; padding: 10px 14px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--text);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover { background: var(--accent-deep); }
+  .drop { margin-top: 10px; border: 2px dashed var(--border); border-radius: 12px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .speedset { display: flex; align-items: center; gap: 12px; }
+  .speedset input { flex: 1; accent-color: var(--accent); }
+  .speedset output { min-width: 64px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  details { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+  summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+  ol.steps { padding-left: 20px; margin: 8px 0; font-size: 14px; }
+  ol.steps li { margin-bottom: 6px; }
+  code.k { background: var(--surface2); border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+  .bm-link {
+    display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 999px;
+    background: var(--yellow); color: #1d1830; font-weight: 700; text-decoration: none; border: 2px dashed #1d1830;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .toast {
+    position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 50; max-width: calc(100% - 32px); text-align: center;
+  }
+  .toast.show { opacity: 1; }
+  .keys { font-size: 13px; color: var(--muted); }
+  .keys b { color: var(--text); }
+
+  /* ---------- 뷰어 ---------- */
+  #viewer { position: fixed; inset: 0; background: var(--reader-bg); display: none; z-index: 10; }
+  #viewer.open { display: block; }
+  #scroller {
+    position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  }
+  #pages { max-width: 800px; margin: 0 auto; }
+  #pages img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+  #pages .gap { height: var(--gap, 0px); }
+  .end {
+    color: #f4f0ff; text-align: center; padding: 48px 16px calc(140px + env(safe-area-inset-bottom));
+  }
+  .end p { margin: 0 0 12px; font-size: 18px; font-weight: 700; }
+  .end .btn { display: inline-flex; max-width: 220px; background: #2c2546; border-color: #3a3158; color: #f4f0ff; }
+
+  #progress { position: absolute; top: 0; left: 0; height: 3px; background: var(--accent); width: 0; z-index: 3; pointer-events: none; }
+
+  .bar {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: max(14px, env(safe-area-inset-bottom)); z-index: 4;
+    width: min(560px, calc(100% - 24px));
+    background: var(--bar); color: var(--bar-text); border-radius: 20px;
+    padding: 10px 12px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    transition: opacity .25s, transform .25s;
+  }
+  .bar.hidden { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
+  .bar .line { display: flex; align-items: center; gap: 8px; }
+  .bar .line + .line { margin-top: 8px; }
+  .ib {
+    width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px;
+    background: rgba(255,255,255,.1); color: var(--bar-text);
+    display: grid; place-items: center; font-size: 18px; font-weight: 700;
+  }
+  .ib.play { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); font-size: 22px; }
+  .ib svg { width: 22px; height: 22px; fill: currentColor; }
+  .bar .speed { flex: 1; text-align: center; min-width: 0; }
+  .bar .speed b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .bar .speed small { display: block; font-size: 11px; opacity: .7; }
+  .bar input[type=range] { flex: 1; accent-color: var(--accent); }
+  .bar .pct { font-size: 12px; opacity: .8; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .peek {
+    position: absolute; top: max(10px, env(safe-area-inset-top)); right: 12px; z-index: 4;
+    background: var(--bar); color: var(--bar-text); border-radius: 999px; padding: 6px 12px; font-size: 13px;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .peek.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<main id="home">
+  <header class="top">
+    <img src="icon-192.png" alt="">
+    <div>
+      <h1>웹툰 자동 스크롤</h1>
+      <p>손 안 대고 편하게 웹툰 읽기</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>기본 속도</h2>
+    <div class="speedset">
+      <input id="homeSpeed" type="range" min="1" max="40" step="1" aria-label="기본 스크롤 속도">
+      <output id="homeSpeedOut"></output>
+    </div>
+    <p class="hint">숫자가 클수록 빨라요. 보는 중에도 언제든 바꿀 수 있어요.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">1</span>웹툰 사이트에서 자동 스크롤</h2>
+    <p>네이버·카카오 등 브라우저로 보는 웹툰 페이지에 자동 스크롤 버튼을 띄워 줍니다 (북마클릿).</p>
+
+    <div class="row">
+      <a id="bmLink" class="bm-link" href="#" title="북마크바로 끌어다 놓으세요">⏬ 툰스크롤</a>
+      <button id="copyBm" class="btn primary" type="button">북마클릿 코드 복사</button>
+    </div>
+    <p class="hint">PC: 노란 버튼을 북마크바로 끌어다 놓기 · 휴대폰: 코드 복사 후 아래 방법대로 북마크 만들기</p>
+
+    <details>
+      <summary>휴대폰(안드로이드 크롬)에서 설치하기</summary>
+      <ol class="steps">
+        <li>위의 <b>북마클릿 코드 복사</b>를 누릅니다.</li>
+        <li>크롬에서 아무 페이지나 북마크(☆)로 저장한 뒤, 북마크 <b>수정</b>을 엽니다.</li>
+        <li>이름을 <code class="k">툰스크롤</code>로, URL 칸은 지우고 복사한 코드를 붙여 넣어 저장합니다.</li>
+        <li>웹툰 회차를 연 상태에서 주소창에 <code class="k">툰스크롤</code>을 입력하고, 아래에 뜨는 ☆ 북마크를 누르면 실행돼요.</li>
+      </ol>
+    </details>
+    <details>
+      <summary>아이폰(사파리)에서 설치하기</summary>
+      <ol class="steps">
+        <li>위의 <b>북마클릿 코드 복사</b>를 누릅니다.</li>
+        <li>아무 페이지에서 공유 버튼 → <b>북마크 추가</b>로 저장합니다.</li>
+        <li>북마크 목록 → <b>편집</b> → 방금 만든 북마크를 눌러 이름은 <code class="k">툰스크롤</code>, 주소는 복사한 코드로 바꿉니다.</li>
+        <li>웹툰 회차 페이지에서 북마크 목록을 열고 <b>툰스크롤</b>을 누르면 실행돼요.</li>
+      </ol>
+    </details>
+    <details>
+      <summary>사용법</summary>
+      <ol class="steps">
+        <li>실행하면 화면 아래에 조작 바가 나타나고 바로 스크롤이 시작돼요.</li>
+        <li>▶/⏸ 재생·정지, − / + 로 속도 조절. 화면을 손가락으로 누르고 있으면 잠깐 멈춰요.</li>
+        <li>다시 북마클릿을 누르거나 ✕ 를 누르면 꺼져요.</li>
+      </ol>
+      <p class="hint">웹툰 앱(네이버 웹툰 앱 등) 안에서는 동작하지 않고, 브라우저로 연 웹툰 페이지에서 동작해요.</p>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">2</span>내 기기의 웹툰 이미지 보기</h2>
+    <p>저장해 둔 웹툰 이미지(또는 폴더)를 열어 이어 붙여 자동 스크롤로 봅니다. 파일은 기기 밖으로 나가지 않아요.</p>
+    <div class="row">
+      <button id="pickFiles" class="btn primary" type="button">이미지 선택</button>
+      <button id="pickFolder" class="btn" type="button">폴더 선택</button>
+    </div>
+    <input id="fileInput" type="file" accept="image/*" multiple hidden>
+    <input id="folderInput" type="file" webkitdirectory multiple hidden>
+    <div id="drop" class="drop">또는 이미지 파일을 여기에 끌어다 놓기</div>
+    <p class="hint">파일 이름 순서(1, 2, … 10)대로 정렬해서 보여 줘요.</p>
+    <p class="keys"><b>키보드</b>: Space 재생/정지 · ↑↓ 속도 · Esc 닫기 · <b>화면 탭</b>: 재생/정지</p>
+  </section>
+</main>
+
+<div id="viewer" role="dialog" aria-label="웹툰 뷰어">
+  <div id="progress"></div>
+  <div id="peek" class="peek"></div>
+  <div id="scroller">
+    <div id="pages"></div>
+    <div class="end" id="endBox">
+      <p>끝까지 읽었어요 🎉</p>
+      <button class="btn" id="toTop" type="button">처음부터 다시</button>
+    </div>
+  </div>
+  <div class="bar" id="bar">
+    <div class="line">
+      <button class="ib" id="close" type="button" aria-label="닫기">✕</button>
+      <button class="ib" id="slower" type="button" aria-label="느리게">−</button>
+      <div class="speed"><b id="speedVal">8</b><small>속도</small></div>
+      <button class="ib" id="faster" type="button" aria-label="빠르게">+</button>
+      <button class="ib play" id="play" type="button" aria-label="재생">▶</button>
+    </div>
+    <div class="line">
+      <input id="speedRange" type="range" min="1" max="40" step="1" aria-label="스크롤 속도">
+      <span class="pct" id="pct">0%</span>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- 웹툰 사이트에서 실행되는 북마클릿 원본 (여기서 링크로 만들어 줍니다) -->
+<script type="text/plain" id="bmSource">
+(function(){
+var d=document,w=window,ID='__toonscroll__';
+var prev=d.getElementById(ID);if(prev){prev.__stop();return;}
+var K='__toonscroll_lv',lv=8;try{lv=+localStorage.getItem(K)||__DEFAULT__;}catch(e){lv=__DEFAULT__;}
+function pick(){var se=d.scrollingElement||d.documentElement;if(se.scrollHeight-w.innerHeight>80)return se;var b=null,bh=0;d.querySelectorAll('body *').forEach(function(e){var o=getComputedStyle(e).overflowY;var h=e.scrollHeight-e.clientHeight;if((o=='auto'||o=='scroll')&&h>bh){bh=h;b=e;}});return b||se;}
+var el=pick(),pos=el.scrollTop,on=true,hold=false,last=0,raf=0,lock=null;
+var host=d.createElement('div');host.id=ID;host.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:2147483647;pointer-events:none';
+var sh=host.attachShadow?host.attachShadow({mode:'open'}):host;
+sh.innerHTML='<style>.b{pointer-events:auto;margin:0 auto 14px;width:max-content;max-width:calc(100vw - 24px);display:flex;align-items:center;gap:6px;background:rgba(23,19,38,.92);color:#f4f0ff;border-radius:999px;padding:6px;box-shadow:0 6px 24px rgba(0,0,0,.4);font:600 15px/1 system-ui,sans-serif;transition:opacity .25s}.b.f{opacity:.35}button{all:unset;cursor:pointer;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);color:#f4f0ff;font:700 18px/1 system-ui,sans-serif;text-align:center}button.p{background:#ff5a7a;width:48px;height:48px}span{min-width:34px;text-align:center;font-variant-numeric:tabular-nums}</style><div class="b"><button data-a="x" aria-label="끄기">✕</button><button data-a="-" aria-label="느리게">−</button><span></span><button data-a="+" aria-label="빠르게">+</button><button class="p" data-a="p" aria-label="재생/정지"></button></div>';
+var bar=sh.querySelector('.b'),out=sh.querySelector('span'),pb=sh.querySelector('.p'),ft=0;
+function ui(){out.textContent=lv;pb.textContent=on?'❚❚':'▶';bar.classList.remove('f');clearTimeout(ft);if(on)ft=setTimeout(function(){bar.classList.add('f');},2500);}
+function wl(){try{if(on&&!lock&&navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){lock=l;l.addEventListener('release',function(){lock=null;});}).catch(function(){});if(!on&&lock){lock.release();lock=null;}}catch(e){}}
+function step(t){raf=requestAnimationFrame(step);var dt=last?Math.min(t-last,100)/1000:0;last=t;if(!on||hold)return;var cur=el.scrollTop;if(Math.abs(cur-pos)>3)pos=cur;pos+=lv*10*dt;el.scrollTop=pos;if(el.scrollTop+el.clientHeight>=el.scrollHeight-2&&el.scrollTop<pos-1){on=false;ui();wl();}}
+function set(v){lv=Math.max(1,Math.min(40,v));try{localStorage.setItem(K,lv);}catch(e){}ui();}
+bar.addEventListener('click',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-a');if(a=='x')host.__stop();else if(a=='-')set(lv-1);else if(a=='+')set(lv+1);else if(a=='p'){on=!on;pos=el.scrollTop;ui();wl();}});
+function hd(e){if(!host.contains(e.target))hold=true;}function hu(){if(hold){hold=false;pos=el.scrollTop;}}
+w.addEventListener('touchstart',hd,{passive:true});w.addEventListener('touchend',hu,{passive:true});w.addEventListener('touchcancel',hu,{passive:true});
+function vis(){if(d.visibilityState=='visible'){lock=null;wl();}}d.addEventListener('visibilitychange',vis);
+host.__stop=function(){cancelAnimationFrame(raf);on=false;wl();w.removeEventListener('touchstart',hd);w.removeEventListener('touchend',hu);w.removeEventListener('touchcancel',hu);d.removeEventListener('visibilitychange',vis);host.remove();};
+d.body.appendChild(host);ui();wl();raf=requestAnimationFrame(step);
+})();
+</script>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const MIN = 1, MAX = 40;
+  const PX_PER_LEVEL = 10;           // 속도 1 = 초당 10px
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+  };
+  const clamp = v => Math.max(MIN, Math.min(MAX, Math.round(v)));
+  let level = clamp(+store.get("toon.speed", 8) || 8);
+
+  // ---------- 토스트 ----------
+  let toastT;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // ---------- 기본 속도 ----------
+  const homeSpeed = $("homeSpeed"), homeOut = $("homeSpeedOut");
+  function syncSpeedUI() {
+    homeSpeed.value = level; homeOut.textContent = "속도 " + level;
+    $("speedRange").value = level; $("speedVal").textContent = level;
+  }
+  function setLevel(v, announce) {
+    level = clamp(v); store.set("toon.speed", level); syncSpeedUI(); buildBookmarklet();
+    if (announce) peek("속도 " + level);
+  }
+  homeSpeed.addEventListener("input", () => setLevel(+homeSpeed.value));
+
+  // ---------- 북마클릿 ----------
+  let bmCode = "";
+  function buildBookmarklet() {
+    const src = $("bmSource").textContent
+      .replace(/__DEFAULT__/g, String(level))
+      .split("\n").map(s => s.trim()).filter(Boolean).join("");
+    bmCode = "javascript:" + encodeURIComponent(src);
+    $("bmLink").setAttribute("href", bmCode);
+  }
+  $("bmLink").addEventListener("click", e => {
+    e.preventDefault();
+    toast("이 버튼은 북마크바로 끌어다 놓아서 쓰는 거예요");
+  });
+  $("copyBm").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(bmCode);
+      toast("복사했어요! 북마크 URL에 붙여 넣으세요");
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = bmCode; document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand("copy"); } catch {}
+      ta.remove();
+      toast(ok ? "복사했어요! 북마크 URL에 붙여 넣으세요" : "복사에 실패했어요. 다시 시도해 주세요");
+    }
+  });
+
+  // ---------- 파일 열기 ----------
+  const fileInput = $("fileInput"), folderInput = $("folderInput");
+  $("pickFiles").addEventListener("click", () => fileInput.click());
+  $("pickFolder").addEventListener("click", () => folderInput.click());
+  fileInput.addEventListener("change", () => { openFiles(fileInput.files); fileInput.value = ""; });
+  folderInput.addEventListener("change", () => { openFiles(folderInput.files); folderInput.value = ""; });
+
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (ev === "drop" || e.target === document.documentElement) drop.classList.remove("over"); }));
+  document.addEventListener("drop", e => { if (e.dataTransfer?.files?.length) openFiles(e.dataTransfer.files); });
+
+  const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|bmp)$/i;
+  let urls = [];
+  function openFiles(list) {
+    const files = [...list].filter(f => f.type.startsWith("image/") || IMG_EXT.test(f.name));
+    if (!files.length) { toast("이미지 파일이 없어요"); return; }
+    const key = f => f.webkitRelativePath || f.name;
+    files.sort((a, b) => key(a).localeCompare(key(b), undefined, { numeric: true, sensitivity: "base" }));
+    closeViewer();
+    const pages = $("pages"); pages.textContent = "";
+    for (const f of files) {
+      const u = URL.createObjectURL(f); urls.push(u);
+      const img = new Image(); img.src = u; img.alt = f.name; img.decoding = "async"; img.draggable = false;
+      pages.appendChild(img);
+    }
+    openViewer();
+    toast(files.length + "장을 불러왔어요");
+  }
+
+  // ---------- 뷰어 / 자동 스크롤 ----------
+  const viewer = $("viewer"), sc = $("scroller"), bar = $("bar"), playBtn = $("play");
+  let playing = false, holding = false, pos = 0, last = 0, raf = 0, hideT = 0, wakeLock = null;
+
+  function openViewer() {
+    viewer.classList.add("open"); document.body.style.overflow = "hidden";
+    sc.scrollTop = 0; pos = 0; updateProgress();
+    history.pushState({ viewer: 1 }, "");
+    showBar();
+    setTimeout(() => play(true), 600);
+  }
+  function closeViewer(fromHistory) {
+    if (!viewer.classList.contains("open")) return;
+    play(false);
+    viewer.classList.remove("open"); document.body.style.overflow = "";
+    urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+    $("pages").textContent = "";
+    if (!fromHistory && history.state?.viewer) history.back();
+  }
+  window.addEventListener("popstate", () => closeViewer(true));
+
+  function play(on) {
+    playing = on;
+    playBtn.textContent = on ? "❚❚" : "▶";
+    playBtn.setAttribute("aria-label", on ? "정지" : "재생");
+    pos = sc.scrollTop; last = 0;
+    cancelAnimationFrame(raf);
+    if (on) raf = requestAnimationFrame(step);
+    keepAwake(on);
+    showBar();
+  }
+  function step(t) {
+    raf = requestAnimationFrame(step);
+    const dt = last ? Math.min(t - last, 100) / 1000 : 0;
+    last = t;
+    if (holding) return;
+    if (Math.abs(sc.scrollTop - pos) > 3) pos = sc.scrollTop;   // 손으로 옮긴 경우 따라가기
+    pos += level * PX_PER_LEVEL * dt;
+    sc.scrollTop = pos;
+    if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) play(false);
+  }
+  async function keepAwake(on) {
+    try {
+      if (on && !wakeLock && navigator.wakeLock) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => { wakeLock = null; });
+      } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && playing) keepAwake(true);
+  });
+
+  function showBar() {
+    bar.classList.remove("hidden");
+    clearTimeout(hideT);
+    if (playing) hideT = setTimeout(() => bar.classList.add("hidden"), 2500);
+  }
+  let peekT;
+  function peek(msg) {
+    if (!viewer.classList.contains("open")) return;
+    const p = $("peek"); p.textContent = msg; p.classList.add("show");
+    clearTimeout(peekT); peekT = setTimeout(() => p.classList.remove("show"), 900);
+  }
+  function updateProgress() {
+    const max = sc.scrollHeight - sc.clientHeight;
+    const r = max > 0 ? Math.min(1, sc.scrollTop / max) : 0;
+    $("progress").style.width = (r * 100) + "%";
+    $("pct").textContent = Math.round(r * 100) + "%";
+  }
+  sc.addEventListener("scroll", updateProgress, { passive: true });
+
+  // 버튼
+  playBtn.addEventListener("click", () => play(!playing));
+  $("slower").addEventListener("click", () => { setLevel(level - 1, true); showBar(); });
+  $("faster").addEventListener("click", () => { setLevel(level + 1, true); showBar(); });
+  $("speedRange").addEventListener("input", e => { setLevel(+e.target.value, true); showBar(); });
+  $("close").addEventListener("click", () => closeViewer());
+  $("toTop").addEventListener("click", () => { sc.scrollTop = 0; play(true); });
+
+  // 탭: 재생/정지 · 누르고 있기: 잠깐 멈춤
+  let downAt = null;
+  sc.addEventListener("pointerdown", e => { downAt = { x: e.clientX, y: e.clientY, t: Date.now() }; holding = true; });
+  const release = e => {
+    holding = false; pos = sc.scrollTop;
+    if (!downAt) return;
+    const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
+    const tap = moved < 10 && Date.now() - downAt.t < 300;
+    downAt = null;
+    if (tap && !e.target.closest("button")) { play(!playing); peek(playing ? "재생" : "정지"); }
+  };
+  sc.addEventListener("pointerup", release);
+  sc.addEventListener("pointercancel", () => { holding = false; downAt = null; pos = sc.scrollTop; });
+  sc.addEventListener("touchend", () => { holding = false; pos = sc.scrollTop; }, { passive: true });
+  sc.addEventListener("pointermove", e => { if (e.pointerType === "mouse") showBar(); });
+
+  // 키보드
+  document.addEventListener("keydown", e => {
+    if (!viewer.classList.contains("open")) return;
+    if (e.key === " " || e.key === "k") { e.preventDefault(); play(!playing); peek(playing ? "재생" : "정지"); }
+    else if (e.key === "ArrowUp" || e.key === "+" || e.key === "=") { e.preventDefault(); setLevel(level + 1, true); }
+    else if (e.key === "ArrowDown" || e.key === "-") { e.preventDefault(); setLevel(level - 1, true); }
+    else if (e.key === "Escape") closeViewer();
+  });
+
+  syncSpeedUI();
+  buildBookmarklet();
+
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
