@@ -57,6 +57,14 @@
   header.top img { width: 48px; height: 48px; border-radius: 12px; }
   header.top h1 { font-size: 22px; margin: 0; letter-spacing: -.02em; }
   header.top p { margin: 0; color: var(--muted); font-size: 13px; }
+  .back-link {
+    margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px;
+    min-height: 40px; padding: 6px 12px; border-radius: 999px; text-decoration: none;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text); font-weight: 700; font-size: 13px;
+  }
+  .back-link:hover { border-color: var(--accent); color: var(--accent); }
+  .back-link svg { width: 18px; height: 18px; flex: none; }
+  @media (max-width: 360px) { .back-link span { display: none; } .back-link { padding: 6px 10px; } }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
     padding: 18px; margin-bottom: 16px;
@@ -159,6 +167,10 @@
       <h1>웹툰 자동 스크롤</h1>
       <p>손 안 대고 편하게 웹툰 읽기</p>
     </div>
+    <a class="back-link" href="../" title="핑퐁 시합 매니저로 돌아가기" aria-label="핑퐁 시합 매니저로 돌아가기">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="15.5" y="23" width="6" height="15" rx="2.5" fill="#b8783c" transform="rotate(38 18.5 30)"/><ellipse cx="20" cy="17" rx="12.5" ry="13" fill="#e0302b" stroke="#fff" stroke-width="1.6"/><circle cx="32.5" cy="7.5" r="5.5" fill="#ff7a1a" stroke="#fff" stroke-width="1.4"/></svg>
+      <span>핑퐁 앱</span>
+    </a>
   </header>
 
   <section class="card">
